@@ -1,0 +1,36 @@
+{
+  "name": "@scisamir/fiber-node",
+  "version": "0.1.2",
+  "description": "Run a prebuilt Fiber Network Node from npm",
+  "license": "MIT",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/scisamir/fiber-dev-kit.git",
+    "directory": "npm"
+  },
+  "bugs": {
+    "url": "https://github.com/scisamir/fiber-dev-kit/issues"
+  },
+  "homepage": "https://github.com/scisamir/fiber-dev-kit#readme",
+  "bin": {
+    "fiber": "bin/fiber.js"
+  },
+  "files": [
+    "bin",
+    "config",
+    "vendor"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "scripts": {
+    "smoke": "node bin/fiber.js version"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

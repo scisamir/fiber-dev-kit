@@ -1,0 +1,10 @@
+fiber:
+  chain: testnet
+
+rpc:
+  listening_addr: "127.0.0.1:8227"
+  enabled_modules:
+    - invoice
+
+services:
+  - rpc
