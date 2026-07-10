@@ -1,12 +1,10 @@
 #!/usr/bin/env node
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { evaluateAlerts, FiberClient, FiberError, diagnose } from "@fiber-dev-kit/core";
 import { Chalk } from "chalk";
 import { FiberNetwork, formatDiagnosis, formatRouteConfidenceReport } from "@fiber-dev-kit/test-client";
-
-const nodes = {
-  a: process.env.FIBER_NODE_A ?? "http://127.0.0.1:8227",
-  b: process.env.FIBER_NODE_B ?? "http://127.0.0.1:8237",
-};
 
 const paymentAmountCkb = Number(process.env.FIBER_DEMO_AMOUNT_CKB ?? 1);
 const forcePayment = process.argv.includes("--force-payment") || process.env.FIBER_FORCE_PAYMENT === "1";
@@ -14,8 +12,12 @@ const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
 const chalk = new Chalk({ level: useColor ? 1 : 0 });
 
 async function main() {
+  const { nodes, source, statePath } = resolveNodes();
+
   printHeader("Fiber Dev Kit Demo");
   printRows([
+    ["Source", source],
+    ["State file", statePath ?? "(manual env overrides)"],
     ["Node A", nodes.a],
     ["Node B", nodes.b],
     ["Amount", `${paymentAmountCkb} CKB`],
@@ -26,6 +28,16 @@ async function main() {
   const nodeB = await readNodeHealth("b", nodes.b);
   printNodeHealth(nodeA);
   printNodeHealth(nodeB);
+
+  if (!nodeA.reachable || !nodeB.reachable) {
+    printSection("CLI Setup");
+    printStatus("SKIP", "One or more Fiber RPC endpoints are unreachable.");
+    printSubhead("Start the demo nodes");
+    console.log(`${indent(2)}npm run example:setup`);
+    printSubhead("Then rerun");
+    console.log(`${indent(2)}npm run example:demo`);
+    return;
+  }
 
   printSection("Network Preflight");
   const network = new FiberNetwork({ nodes, pollIntervalMs: 500, timeoutMs: 15_000 });
@@ -45,6 +57,56 @@ async function main() {
   }
 
   await runPayment(network);
+}
+
+function resolveNodes() {
+  const envNodes = {
+    a: process.env.FIBER_NODE_A,
+    b: process.env.FIBER_NODE_B,
+  };
+  if (envNodes.a && envNodes.b) {
+    return {
+      nodes: { a: envNodes.a, b: envNodes.b },
+      source: "environment",
+      statePath: undefined,
+    };
+  }
+
+  const statePath = defaultStatePath();
+  const stateNodes = readCliStateNodes(statePath);
+  if (stateNodes.a && stateNodes.b) {
+    return {
+      nodes: { a: stateNodes.a, b: stateNodes.b },
+      source: "fiber cli state",
+      statePath,
+    };
+  }
+
+  return {
+    nodes: {
+      a: envNodes.a ?? stateNodes.a ?? "http://127.0.0.1:8227",
+      b: envNodes.b ?? stateNodes.b ?? "http://127.0.0.1:8237",
+    },
+    source: stateNodes.a || stateNodes.b ? "partial fiber cli state" : "default ports",
+    statePath,
+  };
+}
+
+function defaultStatePath() {
+  const devkitHome = process.env.FIBER_DEV_KIT_HOME || path.join(os.homedir(), ".fiber-dev-kit");
+  return path.join(devkitHome, "state.json");
+}
+
+function readCliStateNodes(statePath) {
+  try {
+    const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+    return {
+      a: state?.nodes?.a?.rpcUrl,
+      b: state?.nodes?.b?.rpcUrl,
+    };
+  } catch {
+    return {};
+  }
 }
 
 async function runPayment(network) {
