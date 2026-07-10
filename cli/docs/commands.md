@@ -27,7 +27,7 @@ fiber pay --from a --to b --amount 1
 
 Create one local node and connect it to an external node:
 
-```bash
+```bash 
 fiber start --nodes 1
 fiber accounts --node a
 fiber connect --node a --address /ip4/1.2.3.4/tcp/8228/p2p/QmPeer...

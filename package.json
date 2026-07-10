@@ -6,9 +6,25 @@
   "workspaces": [
     "cli",
     "core",
-    "test-client"
+    "inspector",
+    "test-client",
+    "examples"
   ],
   "scripts": {
+    "build": "npm run build --workspaces --if-present",
     "smoke": "npm --workspace @fiber-dev-kit/cli run smoke"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.1",
+    "@types/ws": "^8.18.1",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "express": "^5.2.1",
+    "ws": "^8.21.0"
   }
 }

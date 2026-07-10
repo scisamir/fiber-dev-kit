@@ -1,17 +1,37 @@
 {
   "name": "@fiber-dev-kit/test-client",
   "version": "0.1.0",
-  "description": "Test client helpers for Fiber Dev Kit",
+  "description": "Programmatic TypeScript test API for Fiber payment and channel flows",
   "license": "MIT",
-  "main": "src/index.js",
-  "files": [
-    "src",
-    "README.md"
-  ],
-  "engines": {
-    "node": ">=18"
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "peerDependencies": {
-    "@fiber-dev-kit/core": "workspace:*"
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --clean && tsc --emitDeclarationOnly --declaration",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fiber-dev-kit/core": "*",
+    "chalk": "^5.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsup": "^8.0.1",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
