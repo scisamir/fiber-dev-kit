@@ -1,9 +1,29 @@
 {
   "name": "@fiber-dev-kit/core",
-  "version": "0.1.0",
+  "version": "0.1.0-rc.0",
   "description": "Network-aware TypeScript RPC client for the Fiber Network Node (FNN)",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/scisamir/fiber-dev-kit.git",
+    "directory": "core"
+  },
+  "bugs": {
+    "url": "https://github.com/scisamir/fiber-dev-kit/issues"
+  },
+  "homepage": "https://github.com/scisamir/fiber-dev-kit#readme",
+  "keywords": [
+    "ckb",
+    "fiber-network",
+    "nervos",
+    "payments",
+    "rpc"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "rc"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -13,7 +33,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CONTRIBUTION.md"
   ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --clean && tsc --emitDeclarationOnly --declaration",

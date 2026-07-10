@@ -1,13 +1,33 @@
 {
   "name": "@fiber-dev-kit/inspector",
-  "version": "0.1.0",
+  "version": "0.1.0-rc.0",
   "description": "Local payment-trace and channel-state dashboard for Fiber nodes",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/scisamir/fiber-dev-kit.git",
+    "directory": "inspector"
+  },
+  "bugs": {
+    "url": "https://github.com/scisamir/fiber-dev-kit/issues"
+  },
+  "homepage": "https://github.com/scisamir/fiber-dev-kit#readme",
+  "keywords": [
+    "ckb",
+    "fiber-network",
+    "nervos",
+    "inspector",
+    "monitoring"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "rc"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "fiber-dev-kit-inspector": "./dist/cli.js"
+    "fiber-dev-kit-inspector": "dist/cli.js"
   },
   "exports": {
     ".": {
@@ -17,7 +37,8 @@
   },
   "files": [
     "dist",
-    "public"
+    "public",
+    "CONTRIBUTION.md"
   ],
   "scripts": {
     "build": "tsup src/index.ts src/cli.ts --format esm --clean && tsc --emitDeclarationOnly --declaration",
@@ -27,7 +48,7 @@
     "watch": "tsup src/index.ts src/cli.ts --format esm --watch"
   },
   "dependencies": {
-    "@fiber-dev-kit/core": "*",
+    "@fiber-dev-kit/core": "0.1.0-rc.0",
     "express": "^4.19.2",
     "ws": "^8.16.0"
   },
