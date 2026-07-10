@@ -12,7 +12,12 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "smoke": "npm --workspace @fiber-dev-kit/cli run smoke"
+    "smoke": "npm --workspace @fiber-dev-kit/cli run smoke",
+    "example:setup": "npm --workspace fiber-dev-kit-example run setup",
+    "example:status": "npm --workspace fiber-dev-kit-example run status",
+    "example:demo": "npm --workspace fiber-dev-kit-example run demo",
+    "example:pay": "npm --workspace fiber-dev-kit-example run pay",
+    "demo": "npm run example:demo"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
