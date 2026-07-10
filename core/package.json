@@ -1,14 +1,32 @@
 {
   "name": "@fiber-dev-kit/core",
   "version": "0.1.0",
-  "description": "Core primitives for Fiber Dev Kit",
+  "description": "Network-aware TypeScript RPC client for the Fiber Network Node (FNN)",
   "license": "MIT",
-  "main": "src/index.js",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "files": [
-    "src",
-    "README.md"
+    "dist"
   ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --clean && tsc --emitDeclarationOnly --declaration",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.1",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  },
   "engines": {
-    "node": ">=18"
+    "node": ">=18.0.0"
   }
 }

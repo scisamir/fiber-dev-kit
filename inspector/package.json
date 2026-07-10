@@ -1,0 +1,43 @@
+{
+  "name": "@fiber-dev-kit/inspector",
+  "version": "0.1.0",
+  "description": "Local payment-trace and channel-state dashboard for Fiber nodes",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "fiber-dev-kit-inspector": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "public"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm --clean && tsc --emitDeclarationOnly --declaration",
+    "dev": "npm run build && node dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run build && node dist/cli.js",
+    "watch": "tsup src/index.ts src/cli.ts --format esm --watch"
+  },
+  "dependencies": {
+    "@fiber-dev-kit/core": "*",
+    "express": "^4.19.2",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/ws": "^8.5.10",
+    "tsup": "^8.0.1",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
