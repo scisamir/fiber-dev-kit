@@ -1,0 +1,14 @@
+{
+  "name": "fiber-dev-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Workspace for Fiber Dev Kit packages",
+  "workspaces": [
+    "cli",
+    "core",
+    "test-client"
+  ],
+  "scripts": {
+    "smoke": "npm --workspace @fiber-dev-kit/cli run smoke"
+  }
+}

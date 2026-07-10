@@ -1,6 +1,6 @@
-# @scisamir/fiber-node
+# @fiber-dev-kit/cli
 
-Run a prebuilt Fiber Network Node from npm.
+Fiber Dev Kit CLI for running Fiber nodes quickly from npm.
 
 This first package is a Linux x64 MVP. It vendors the current `fnn` and
 `fnn-cli` release binaries so users do not need to download the Fiber source
@@ -9,10 +9,63 @@ tree or wait for a Rust build.
 ## Install
 
 ```bash
-npm install -g @scisamir/fiber-node
+npm install -g @fiber-dev-kit/cli
 ```
 
 ## Use
+
+Run diagnostics:
+
+```bash
+fiber doctor
+```
+
+Start a two-node dev kit and try to open a channel:
+
+```bash
+fiber start --nodes 2 --channel 200
+```
+
+Start only one managed node, then connect it to an external Fiber node:
+
+```bash
+fiber start --nodes 1
+fiber connect --node a --address /ip4/1.2.3.4/tcp/8228/p2p/QmPeer...
+fiber channel open --node a --peer 03abc... --amount 200 --wait 180
+```
+
+Watch node and channel status:
+
+```bash
+fiber status --watch
+```
+
+Send a test payment:
+
+```bash
+fiber pay --from a --to b --amount 1
+```
+
+Show generated node accounts and funding addresses:
+
+```bash
+fiber accounts
+fiber accounts --node a
+```
+
+Export local dev keys only when you explicitly need them:
+
+```bash
+fiber keys export --node a --yes
+```
+
+Open the terminal inspector:
+
+```bash
+fiber inspect
+```
+
+You can still run a single Fiber node:
 
 ```bash
 fiber start
@@ -79,11 +132,23 @@ Do not use the generated key for production funds.
 
 ## Commands
 
+Full command docs live in [`docs/commands.md`](./docs/commands.md).
+
 ```bash
 fiber version
+fiber doctor
+fiber start --nodes 2 --channel 200 [--wait 180]
 fiber start [--background|-b] [--dry-run] [-- FNN_ARGS...]
+fiber connect --node a --address <multiaddr>
+fiber connect --node a --pubkey <peer-pubkey>
+fiber channel open --node a --peer <peer-pubkey> --amount 200
+fiber channel list --node a
+fiber pay --from a --to b --amount 1
+fiber accounts [--node a] [--json]
+fiber keys export --node a --yes
+fiber status [--watch]
+fiber inspect
 fiber node [FNN_ARGS...]
 fiber cli [FNN_CLI_ARGS...]
-fiber status
-fiber stop
+fiber stop [--all]
 ```

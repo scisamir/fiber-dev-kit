@@ -1,0 +1,14 @@
+{
+  "name": "@fiber-dev-kit/core",
+  "version": "0.1.0",
+  "description": "Core primitives for Fiber Dev Kit",
+  "license": "MIT",
+  "main": "src/index.js",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

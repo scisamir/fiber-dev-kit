@@ -1,0 +1,17 @@
+{
+  "name": "@fiber-dev-kit/test-client",
+  "version": "0.1.0",
+  "description": "Test client helpers for Fiber Dev Kit",
+  "license": "MIT",
+  "main": "src/index.js",
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "peerDependencies": {
+    "@fiber-dev-kit/core": "workspace:*"
+  }
+}
