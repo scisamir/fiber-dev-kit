@@ -303,3 +303,4 @@ Use `fiber stop` for the single-node background process. Use `fiber stop --all` 
 - `FIBER_SECRET_KEY_PASSWORD` sets the node key password. Default: `password`.
 - `CKB_NODE_RPC_URL` sets the CKB RPC used by diagnostics and balance checks. Default: `https://testnet.ckbapp.dev/`.
 - `RPC_LISTENING_ADDR` can force the single-node RPC listen address.
+- `NO_COLOR=1` disables Chalk colors for plain terminal output.

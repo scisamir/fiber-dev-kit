@@ -14,10 +14,11 @@
   },
   "homepage": "https://github.com/scisamir/fiber-dev-kit#readme",
   "bin": {
-    "fiber": "bin/fiber.js"
+    "fiber": "dist/fiber.js"
   },
+  "main": "./dist/fiber.js",
   "files": [
-    "bin",
+    "dist",
     "config",
     "docs",
     "vendor"
@@ -29,7 +30,17 @@
     "x64"
   ],
   "scripts": {
-    "smoke": "node bin/fiber.js version"
+    "build": "tsc && chmod +x dist/fiber.js",
+    "typecheck": "tsc --noEmit",
+    "prepack": "npm run build",
+    "smoke": "npm run build && node dist/fiber.js version"
+  },
+  "dependencies": {
+    "chalk": "^5.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=18"

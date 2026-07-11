@@ -9,6 +9,8 @@ const os = require("os");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 
+type AnyRecord = Record<string, any>;
+
 const pkgRoot = path.resolve(__dirname, "..");
 const defaultRpcHost = "127.0.0.1";
 const defaultRpcPort = 8227;
@@ -23,37 +25,108 @@ const platformKey = `${process.platform}-${process.arch}`;
 const ckbShannons = 100_000_000n;
 const defaultCkbRpcUrl = "https://testnet.ckbapp.dev/";
 const nodeAliases = ["a", "b", "c", "d", "e"];
+let chalk = plainChalk();
+
+function plainChalk() {
+  const passthrough = (...values) => values.join(" ");
+  let proxy;
+  proxy = new Proxy(passthrough, {
+    get: () => proxy,
+    apply: (_, __, values) => values.join(" ")
+  });
+  return proxy;
+}
+
+async function loadChalk() {
+  try {
+    const mod = await import("chalk");
+    chalk = mod.default || chalk;
+  } catch (_) {
+    chalk = plainChalk();
+  }
+}
+
+function title(value) {
+  return chalk.bold(value);
+}
+
+function dim(value) {
+  return chalk.dim(value);
+}
+
+function label(value) {
+  return chalk.dim(value);
+}
+
+function valueText(value) {
+  return chalk.cyan(value);
+}
+
+function commandText(value) {
+  return chalk.cyan(value);
+}
+
+function successText(value) {
+  return chalk.green(value);
+}
+
+function warningText(value) {
+  return chalk.yellow(value);
+}
+
+function errorText(value) {
+  return chalk.red(value);
+}
+
+function statusText(value) {
+  const raw = String(value);
+  const normalized = raw.trim();
+  if (/^(OK|ready|online|running|yes|Success|Succeeded|Connected|ChannelReady|Started)$/i.test(normalized)) {
+    return successText(raw);
+  }
+  if (/WARN|warning|pending|opening|negotiating|notstarted|submitted|unknown/i.test(normalized)) {
+    return warningText(raw);
+  }
+  if (/FAIL|failed|offline|not running|not ready|missing|unavailable|closed|abandoned|no$/i.test(normalized)) {
+    return errorText(raw);
+  }
+  return raw;
+}
+
+function kv(key, value) {
+  return `  ${label(`${key}:`)} ${value}`;
+}
 
 function fail(message) {
-  console.error(`fiber: ${message}`);
+  console.error(`${errorText("fiber:")} ${message}`);
   process.exit(1);
 }
 
 function usage() {
-  console.log(`Usage:
-  fiber version
-  fiber doctor
-  fiber start [--background|-b] [--dry-run] [-- FNN_ARGS...]
-  fiber start --nodes 2 --channel 200 [--wait 180]
-  fiber connect --node a --address <multiaddr>
-  fiber connect --node a --pubkey <peer-pubkey>
-  fiber channel open --node a --peer <peer-pubkey> --amount 200
-  fiber channel list --node a
-  fiber pay --from a --to b --amount 1
-  fiber accounts [--node a] [--json]
-  fiber keys export --node a --yes
-  fiber status [--watch]
-  fiber inspect
-  fiber node [FNN_ARGS...]
-  fiber cli [FNN_CLI_ARGS...]
-  fiber stop [--all]
+  console.log(`${title("Usage:")}
+  ${commandText("fiber version")}
+  ${commandText("fiber doctor")}
+  ${commandText("fiber start")} ${dim("[--background|-b] [--dry-run] [-- FNN_ARGS...]")}
+  ${commandText("fiber start --nodes 2 --channel 200")} ${dim("[--wait 180]")}
+  ${commandText("fiber connect --node a --address <multiaddr>")}
+  ${commandText("fiber connect --node a --pubkey <peer-pubkey>")}
+  ${commandText("fiber channel open --node a --peer <peer-pubkey> --amount 200")}
+  ${commandText("fiber channel list --node a")}
+  ${commandText("fiber pay --from a --to b --amount 1")}
+  ${commandText("fiber accounts")} ${dim("[--node a] [--json]")}
+  ${commandText("fiber keys export --node a --yes")}
+  ${commandText("fiber status")} ${dim("[--watch]")}
+  ${commandText("fiber inspect")}
+  ${commandText("fiber node")} ${dim("[FNN_ARGS...]")}
+  ${commandText("fiber cli")} ${dim("[FNN_CLI_ARGS...]")}
+  ${commandText("fiber stop")} ${dim("[--all]")}
 
-Environment:
-  FIBER_HOME                 Runtime directory. Default: ~/.fiber-node
-  FIBER_DEV_KIT_HOME         Multi-node dev kit directory. Default: ~/.fiber-dev-kit
-  FIBER_RPC_URL              RPC URL to start/connect to. Default: ${defaultRpcUrl}
-  FIBER_CONFIG_TEMPLATE      Bundled config name or config file path. Default: ${defaultConfigTemplate}
-  FIBER_SECRET_KEY_PASSWORD  Key password. Default: ${defaultPassword}`);
+${title("Environment:")}
+  ${valueText("FIBER_HOME")}                 Runtime directory. Default: ~/.fiber-node
+  ${valueText("FIBER_DEV_KIT_HOME")}         Multi-node dev kit directory. Default: ~/.fiber-dev-kit
+  ${valueText("FIBER_RPC_URL")}              RPC URL to start/connect to. Default: ${defaultRpcUrl}
+  ${valueText("FIBER_CONFIG_TEMPLATE")}      Bundled config name or config file path. Default: ${defaultConfigTemplate}
+  ${valueText("FIBER_SECRET_KEY_PASSWORD")}  Key password. Default: ${defaultPassword}`);
 }
 
 function platformDir() {
@@ -134,7 +207,7 @@ function run(bin, args, env = {}) {
   });
 }
 
-function runSync(bin, args, options = {}) {
+function runSync(bin: string, args: string[], options: AnyRecord = {}) {
   return spawnSync(bin, args, {
     stdio: options.stdio || "inherit",
     env: { ...process.env, ...(options.env || {}) },
@@ -142,7 +215,7 @@ function runSync(bin, args, options = {}) {
   });
 }
 
-function runCapture(bin, args, options = {}) {
+function runCapture(bin: string, args: string[], options: AnyRecord = {}) {
   return spawnSync(bin, args, {
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, ...(options.env || {}) },
@@ -150,8 +223,8 @@ function runCapture(bin, args, options = {}) {
   });
 }
 
-function parseArgs(args) {
-  const out = { _: [] };
+function parseArgs(args: string[]): AnyRecord {
+  const out: AnyRecord = { _: [] };
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "--") {
@@ -198,7 +271,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function loadState() {
+function loadState(): AnyRecord {
   try {
     return JSON.parse(fs.readFileSync(devkitStatePath, "utf8"));
   } catch (_) {
@@ -213,7 +286,7 @@ function loadState() {
   }
 }
 
-function saveState(state) {
+function saveState(state: AnyRecord) {
   fs.mkdirSync(devkitDir, { recursive: true, mode: 0o700 });
   fs.writeFileSync(devkitStatePath, `${JSON.stringify(state, null, 2)}\n`);
 }
@@ -226,7 +299,7 @@ function nodeDir(label) {
   return path.join(devkitDir, "nodes", label);
 }
 
-function nodeByLabel(state, label) {
+function nodeByLabel(state: AnyRecord, label: any): AnyRecord {
   const key = String(label || "").toLowerCase();
   const node = state.nodes[key];
   if (!node) {
@@ -302,7 +375,7 @@ function parseJsonOutput(text) {
   }
 }
 
-function findNested(value, predicate) {
+function findNested(value: any, predicate: (value: any) => boolean): any {
   if (predicate(value)) return value;
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -318,12 +391,12 @@ function findNested(value, predicate) {
   return undefined;
 }
 
-function outputField(output, key) {
+function outputField(output: any, key: string): string | null {
   const match = String(output || "").match(new RegExp(`^${key}:\\s*(.+)$`, "mi"));
   return match ? match[1].trim() : null;
 }
 
-function collectNested(value, predicate, out = []) {
+function collectNested(value: any, predicate: (value: any) => boolean, out: any[] = []): any[] {
   if (predicate(value)) out.push(value);
   if (Array.isArray(value)) {
     for (const item of value) collectNested(item, predicate, out);
@@ -333,7 +406,7 @@ function collectNested(value, predicate, out = []) {
   return out;
 }
 
-function fnnCli(args, options = {}) {
+function fnnCli(args: string[], options: AnyRecord = {}): AnyRecord {
   const result = runCapture(binPath("fnn-cli"), args, options);
   return {
     ok: result.status === 0,
@@ -343,17 +416,17 @@ function fnnCli(args, options = {}) {
   };
 }
 
-function cliJson(rpcUrl, args) {
+function cliJson(rpcUrl: string, args: string[]): AnyRecord {
   const result = fnnCli(["--url", rpcUrl, "--output-format", "json", "--no-banner", ...args]);
   const json = parseJsonOutput(result.stdout);
   return { ...result, json };
 }
 
-function cliText(rpcUrl, args) {
+function cliText(rpcUrl: string, args: string[]): AnyRecord {
   return fnnCli(["--url", rpcUrl, "--no-banner", ...args]);
 }
 
-function commandError(result) {
+function commandError(result: AnyRecord): string {
   return (result.stderr || result.stdout || `command exited with status ${result.status}`).trim();
 }
 
@@ -366,7 +439,7 @@ function formatCliCommand(rpcUrl, args) {
   return [binPath("fnn-cli"), "--url", rpcUrl, "--no-banner", ...args].map(shellQuote).join(" ");
 }
 
-function jsonRpc(url, method, params = [], timeoutMs = 4000) {
+function jsonRpc(url: string, method: string, params: any[] = [], timeoutMs = 4000): Promise<AnyRecord> {
   return new Promise((resolve) => {
     let parsed;
     try {
@@ -422,7 +495,7 @@ async function findFreePort(startPort) {
   fail(`could not find a free port from ${startPort} to ${startPort + 199}`);
 }
 
-function commandVersion(command, args = ["--version"]) {
+function commandVersion(command: string, args: string[] = ["--version"]): AnyRecord {
   const result = runCapture(command, args);
   return {
     ok: result.status === 0,
@@ -494,7 +567,7 @@ function deriveAddresses(lockArg) {
   return json && json.address ? json.address : null;
 }
 
-async function capacityForLock(lockScript) {
+async function capacityForLock(lockScript: any): Promise<AnyRecord | null> {
   if (!lockScript) return null;
   const ckbRpcUrl = process.env.CKB_NODE_RPC_URL || defaultCkbRpcUrl;
   const result = await jsonRpc(ckbRpcUrl, "get_cells_capacity", [{ script: lockScript, script_type: "lock" }]);
@@ -601,7 +674,7 @@ async function findAvailableRpcEndpoint() {
   fail(`could not find a free RPC port from ${defaultRpcPort} to ${defaultRpcPort + 99}`);
 }
 
-async function resolveRpcEndpoint(fnnArgs, options = {}) {
+async function resolveRpcEndpoint(fnnArgs: string[], options: AnyRecord = {}) {
   const skipProbe = Boolean(options.skipProbe);
   const explicitListenAddr = getOptionValue(fnnArgs, "--rpc-listening-addr");
   if (explicitListenAddr) {
@@ -666,16 +739,16 @@ async function startNode(args) {
   };
 
   if (dryRun) {
-    console.log(`${fnn} ${finalArgs.map((arg) => JSON.stringify(arg)).join(" ")}`);
-    console.log(`FIBER_HOME=${runtimeDir}`);
-    console.log(`FIBER_RPC_URL=${rpc.endpoint.url}`);
+    console.log(`${warningText("[dry-run]")} ${commandText(`${fnn} ${finalArgs.map((arg) => JSON.stringify(arg)).join(" ")}`)}`);
+    console.log(`${valueText("FIBER_HOME")}=${runtimeDir}`);
+    console.log(`${valueText("FIBER_RPC_URL")}=${rpc.endpoint.url}`);
     return;
   }
 
   fs.writeFileSync(rpcUrlFile, `${rpc.endpoint.url}\n`);
 
   if (!background) {
-    console.log(`fiber: RPC will listen at ${rpc.endpoint.url}`);
+    console.log(`${successText("fiber:")} RPC will listen at ${valueText(rpc.endpoint.url)}`);
     run(fnn, finalArgs, env);
     return;
   }
@@ -691,10 +764,10 @@ async function startNode(args) {
   });
   child.unref();
   fs.writeFileSync(pidFile, `${child.pid}\n`);
-  console.log(`Started Fiber node`);
-  console.log(`  pid: ${child.pid}`);
-  console.log(`  rpc: ${rpc.endpoint.url}`);
-  console.log(`  log: ${logFile}`);
+  console.log(successText("Started Fiber node"));
+  console.log(kv("pid", valueText(child.pid)));
+  console.log(kv("rpc", valueText(rpc.endpoint.url)));
+  console.log(kv("log", valueText(logFile)));
 }
 
 function runCli(args) {
@@ -765,7 +838,7 @@ function rpcPortOpen(url) {
   });
 }
 
-function ensureDevkitRuntimeNode(label, rpcPort, p2pPort) {
+function ensureDevkitRuntimeNode(label: string, rpcPort: number, p2pPort: number): AnyRecord {
   const home = nodeDir(label);
   const ckbDir = path.join(home, "ckb");
   const fiberDir = path.join(home, "fiber");
@@ -801,7 +874,7 @@ function ensureDevkitRuntimeNode(label, rpcPort, p2pPort) {
   };
 }
 
-function startManagedNode(node, extraArgs = []) {
+function startManagedNode(node: AnyRecord, extraArgs: string[] = []): number {
   const fnn = binPath("fnn");
   const out = fs.openSync(node.logFile, "a");
   const args = [
@@ -849,7 +922,7 @@ async function waitForRpc(url, timeoutMs) {
   return false;
 }
 
-async function waitForNodeInfo(node, timeoutMs) {
+async function waitForNodeInfo(node: AnyRecord, timeoutMs: number): Promise<AnyRecord> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const result = cliJson(node.rpcUrl, ["info"]);
@@ -863,7 +936,7 @@ async function waitForNodeInfo(node, timeoutMs) {
   return { ok: false };
 }
 
-async function waitForPeerAddress(node, timeoutMs) {
+async function waitForPeerAddress(node: AnyRecord, timeoutMs: number): Promise<string | null> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const address = parsePeerAddressFromLog(node.logFile);
@@ -873,7 +946,7 @@ async function waitForPeerAddress(node, timeoutMs) {
   return null;
 }
 
-function normalizeList(json) {
+function normalizeList(json: any): any[] {
   if (!json) return [];
   if (Array.isArray(json)) return json;
   for (const key of ["channels", "payments", "peers", "result", "items"]) {
@@ -883,16 +956,16 @@ function normalizeList(json) {
   return [];
 }
 
-function textContains(value, pattern) {
+function textContains(value: any, pattern: RegExp): boolean {
   return pattern.test(JSON.stringify(value || {}));
 }
 
-function channelState(channel) {
+function channelState(channel: any): string {
   const found = findNested(channel, (value) => typeof value === "string" && /ChannelReady|NegotiatingFunding|Funding|Awaiting|Collaborating|Signing|Shutdown|Closed|Abandoned|Failed/i.test(value));
   return found || "Unknown";
 }
 
-function listChannels(node, options = {}) {
+function listChannels(node: AnyRecord, options: AnyRecord = {}): AnyRecord {
   const args = ["channel", "list_channels"];
   if (options.pubkey) args.push("--pubkey", options.pubkey);
   if (options.includeClosed) args.push("--include-closed", "true");
@@ -901,11 +974,11 @@ function listChannels(node, options = {}) {
   return { ...result, channels: normalizeList(result.json) };
 }
 
-function extractChannelId(channel) {
+function extractChannelId(channel: any): string | null {
   return findNested(channel, (value) => typeof value === "string" && /^0x[0-9a-f]{64}$/i.test(value)) || null;
 }
 
-async function waitForChannelReady(node, peerPubkey, timeoutMs) {
+async function waitForChannelReady(node: AnyRecord, peerPubkey: string, timeoutMs: number): Promise<AnyRecord> {
   const deadline = Date.now() + timeoutMs;
   let lastState = "Unknown";
   while (Date.now() < deadline) {
@@ -926,12 +999,12 @@ async function waitForChannelReady(node, peerPubkey, timeoutMs) {
   return { ok: false, state: lastState };
 }
 
-function listPayments(node) {
+function listPayments(node: AnyRecord): AnyRecord {
   const result = cliJson(node.rpcUrl, ["payment", "list_payments", "--limit", "10"]);
   return { ...result, payments: normalizeList(result.json) };
 }
 
-function summarizeNode(node) {
+function summarizeNode(node: AnyRecord): AnyRecord {
   const pid = readPid(node.pidFile);
   const info = cliJson(node.rpcUrl, ["info"]);
   const peers = info.ok ? (findNested(info.json, (value) => typeof value === "string" && /^0x[0-9a-f]+$/i.test(value)) || outputField(info.stdout, "peers_count")) : null;
@@ -944,7 +1017,7 @@ function summarizeNode(node) {
   };
 }
 
-async function accountInfo(node) {
+async function accountInfo(node: AnyRecord): Promise<AnyRecord> {
   const info = cliJson(node.rpcUrl, ["info"]);
   const online = info.ok;
   const pubkey = online
@@ -971,31 +1044,31 @@ async function accountInfo(node) {
   };
 }
 
-function printAccount(account) {
-  console.log(`node-${account.label}`);
-  console.log(`  rpc: ${account.rpcUrl}`);
-  console.log(`  home: ${account.home}`);
-  console.log(`  online: ${account.online ? "yes" : "no"}`);
-  console.log(`  fiber pubkey: ${account.pubkey || "unknown until node RPC is online"}`);
-  console.log(`  ckb key: ${account.ckbKey.exists ? `${account.ckbKey.path} (${account.ckbKey.format})` : `${account.ckbKey.path} (missing)`}`);
-  console.log(`  fiber key: ${account.fiberKey.exists ? `${account.fiberKey.path} (${account.fiberKey.format})` : `${account.fiberKey.path} (missing until node starts)`}`);
-  if (account.peerAddress) console.log(`  peer address: ${account.peerAddress}`);
+function printAccount(account: AnyRecord) {
+  console.log(title(`node-${account.label}`));
+  console.log(kv("rpc", valueText(account.rpcUrl)));
+  console.log(kv("home", valueText(account.home)));
+  console.log(kv("online", statusText(account.online ? "yes" : "no")));
+  console.log(kv("fiber pubkey", account.pubkey ? valueText(account.pubkey) : warningText("unknown until node RPC is online")));
+  console.log(kv("ckb key", account.ckbKey.exists ? `${valueText(account.ckbKey.path)} ${dim(`(${account.ckbKey.format})`)}` : `${valueText(account.ckbKey.path)} ${errorText("(missing)")}`));
+  console.log(kv("fiber key", account.fiberKey.exists ? `${valueText(account.fiberKey.path)} ${dim(`(${account.fiberKey.format})`)}` : `${valueText(account.fiberKey.path)} ${warningText("(missing until node starts)")}`));
+  if (account.peerAddress) console.log(kv("peer address", valueText(account.peerAddress)));
   if (account.fundingLock) {
-    console.log("  funding lock:");
-    console.log(`    code_hash: ${account.fundingLock.code_hash}`);
-    console.log(`    hash_type: ${account.fundingLock.hash_type}`);
-    console.log(`    args: ${account.fundingLock.args}`);
+    console.log(kv("funding lock", ""));
+    console.log(`    ${label("code_hash:")} ${valueText(account.fundingLock.code_hash)}`);
+    console.log(`    ${label("hash_type:")} ${valueText(account.fundingLock.hash_type)}`);
+    console.log(`    ${label("args:")} ${valueText(account.fundingLock.args)}`);
   } else {
-    console.log("  funding lock: unavailable until node RPC is online");
+    console.log(kv("funding lock", warningText("unavailable until node RPC is online")));
   }
   if (account.address) {
-    console.log(`  testnet address: ${account.address.testnet}`);
-    console.log(`  mainnet address: ${account.address.mainnet}`);
+    console.log(kv("testnet address", valueText(account.address.testnet)));
+    console.log(kv("mainnet address", valueText(account.address.mainnet)));
   } else {
-    console.log("  address: unavailable");
+    console.log(kv("address", warningText("unavailable")));
   }
   if (account.capacity) {
-    console.log(`  capacity: ${account.capacity.ok ? account.capacity.capacity : `unavailable (${account.capacity.error})`}`);
+    console.log(kv("capacity", account.capacity.ok ? valueText(account.capacity.capacity) : warningText(`unavailable (${account.capacity.error})`)));
   }
   console.log("");
 }
@@ -1017,7 +1090,7 @@ async function accounts(args) {
     return;
   }
   for (const account of result) printAccount(account);
-  console.log("Secrets are hidden. Use `fiber keys export --node a --yes` only for local dev recovery.");
+  console.log(dim(`Secrets are hidden. Use ${commandText("fiber keys export --node a --yes")} only for local dev recovery.`));
 }
 
 function exportKeys(args) {
@@ -1038,12 +1111,12 @@ function exportKeys(args) {
   const fiberKeyPath = path.join(node.fiberDir, "sk");
   const ckbKey = secretPayload(ckbKeyPath);
   const fiberKey = secretPayload(fiberKeyPath);
-  console.log(`node-${node.label} dev keys`);
-  console.log("WARNING: these are local development secrets. Do not paste them in public.");
-  console.log(`ckb key path: ${ckbKeyPath}`);
-  console.log(`ckb key ${ckbKey ? `(${ckbKey.encoding}): ${ckbKey.value}` : "(missing)"}`);
-  console.log(`fiber key path: ${fiberKeyPath}`);
-  console.log(`fiber key ${fiberKey ? `(${fiberKey.encoding}): ${fiberKey.value}` : "(missing until node starts)"}`);
+  console.log(title(`node-${node.label} dev keys`));
+  console.log(warningText("WARNING: these are local development secrets. Do not paste them in public."));
+  console.log(kv("ckb key path", valueText(ckbKeyPath)));
+  console.log(kv("ckb key", ckbKey ? `${dim(`(${ckbKey.encoding})`)}: ${ckbKey.value}` : errorText("(missing)")));
+  console.log(kv("fiber key path", valueText(fiberKeyPath)));
+  console.log(kv("fiber key", fiberKey ? `${dim(`(${fiberKey.encoding})`)}: ${fiberKey.value}` : warningText("(missing until node starts)")));
 }
 
 async function startDevKit(args) {
@@ -1058,10 +1131,10 @@ async function startDevKit(args) {
   const extraArgs = opts._ || [];
 
   fs.mkdirSync(devkitDir, { recursive: true, mode: 0o700 });
-  console.log(`Fiber Dev Kit home: ${devkitDir}`);
-  console.log("Binaries: using bundled fnn and fnn-cli");
+  console.log(kv("Fiber Dev Kit home", valueText(devkitDir)));
+  console.log(kv("Binaries", successText("using bundled fnn and fnn-cli")));
 
-  const state = {
+  const state: AnyRecord = {
     version: 1,
     createdAt: new Date().toISOString(),
     devkitDir,
@@ -1081,26 +1154,26 @@ async function startDevKit(args) {
     const node = ensureDevkitRuntimeNode(label, rpcPort, p2pPort);
     state.nodes[label] = node;
     if (dryRun) {
-      console.log(`[dry-run] node-${label}: ${node.rpcUrl}, ${node.p2pListenAddr}`);
+      console.log(`${warningText("[dry-run]")} ${title(`node-${label}`)}: ${valueText(node.rpcUrl)}, ${valueText(node.p2pListenAddr)}`);
       continue;
     }
     node.pid = startManagedNode(node, extraArgs);
-    console.log(`Started node-${label}`);
-    console.log(`  pid: ${node.pid}`);
-    console.log(`  rpc: ${node.rpcUrl}`);
-    console.log(`  log: ${node.logFile}`);
+    console.log(`${successText("Started")} ${title(`node-${label}`)}`);
+    console.log(kv("pid", valueText(node.pid)));
+    console.log(kv("rpc", valueText(node.rpcUrl)));
+    console.log(kv("log", valueText(node.logFile)));
   }
 
   saveState(state);
   if (dryRun) return;
 
-  for (const node of Object.values(state.nodes)) {
+  for (const node of Object.values(state.nodes) as AnyRecord[]) {
     const ready = await waitForRpc(node.rpcUrl, waitSeconds * 1000);
     if (!ready) fail(`node-${node.label} RPC did not become ready at ${node.rpcUrl}`);
     const info = await waitForNodeInfo(node, waitSeconds * 1000);
     if (info.ok) {
       node.pubkey = info.pubkey;
-      console.log(`node-${node.label}: online${node.pubkey ? ` | pubkey ${node.pubkey}` : ""}`);
+      console.log(`${title(`node-${node.label}`)}: ${statusText("online")}${node.pubkey ? ` | ${label("pubkey")} ${valueText(node.pubkey)}` : ""}`);
     }
   }
 
@@ -1108,17 +1181,17 @@ async function startDevKit(args) {
     const peerAddress = await waitForPeerAddress(state.nodes.b, waitSeconds * 1000);
     state.nodes.b.peerAddress = peerAddress;
     if (peerAddress) {
-      console.log(`Connecting node-a -> node-b`);
+      console.log(`${warningText("Connecting")} ${title("node-a")} -> ${title("node-b")}`);
       const connect = cliText(state.nodes.a.rpcUrl, ["peer", "connect_peer", "--address", peerAddress, "--save", "true"]);
       if (!connect.ok) {
-        console.log(`peer connect failed: ${(connect.stderr || connect.stdout).trim()}`);
+        console.log(`${errorText("peer connect failed:")} ${(connect.stderr || connect.stdout).trim()}`);
       }
     } else {
-      console.log("Could not discover node-b peer address from logs");
+      console.log(warningText("Could not discover node-b peer address from logs"));
     }
 
     if (channelAmount && state.nodes.b.pubkey) {
-      console.log(`Opening channel: node-a -> node-b | ${fromShannons(channelAmount)} CKB`);
+      console.log(`${warningText("Opening channel:")} ${title("node-a")} -> ${title("node-b")} | ${valueText(fromShannons(channelAmount))} CKB`);
       const open = cliText(state.nodes.a.rpcUrl, [
         "channel", "open_channel",
         "--pubkey", state.nodes.b.pubkey,
@@ -1127,8 +1200,8 @@ async function startDevKit(args) {
       state.channel.state = open.ok ? "Opening" : "OpenFailed";
       if (!open.ok) {
         state.channel.error = (open.stderr || open.stdout).trim();
-        console.log(`channel open failed: ${state.channel.error}`);
-        console.log("Run `fiber doctor` for the recovery checklist.");
+        console.log(`${errorText("channel open failed:")} ${state.channel.error}`);
+        console.log(`Run ${commandText("fiber doctor")} for the recovery checklist.`);
       } else {
         const deadline = Date.now() + waitSeconds * 1000;
         while (Date.now() < deadline) {
@@ -1142,7 +1215,7 @@ async function startDevKit(args) {
           if (negotiating) state.channel.state = "NegotiatingFunding";
           await sleep(2000);
         }
-        console.log(`channel state: ${state.channel.state}`);
+        console.log(kv("channel state", statusText(state.channel.state)));
       }
     }
   }
@@ -1151,45 +1224,45 @@ async function startDevKit(args) {
   printReadySummary(state);
 }
 
-function printReadySummary(state) {
+function printReadySummary(state: AnyRecord) {
   console.log("");
-  console.log("Fiber Dev Kit summary");
-  for (const node of Object.values(state.nodes)) {
-    console.log(`  node-${node.label}: ${node.rpcUrl}${node.pubkey ? ` | ${node.pubkey}` : ""}`);
+  console.log(title("Fiber Dev Kit summary"));
+  for (const node of Object.values(state.nodes) as AnyRecord[]) {
+    console.log(`  ${title(`node-${node.label}`)}: ${valueText(node.rpcUrl)}${node.pubkey ? ` | ${valueText(node.pubkey)}` : ""}`);
   }
   if (state.channel) {
-    console.log(`  channel: ${state.channel.state} | ${state.channel.amountCkb} CKB`);
+    console.log(kv("channel", `${statusText(state.channel.state)} | ${valueText(state.channel.amountCkb)} CKB`));
   }
   console.log("");
-  console.log("Next:");
-  console.log("  fiber doctor");
-  console.log("  fiber status --watch");
-  console.log("  fiber pay --from a --to b --amount 1");
+  console.log(title("Next:"));
+  console.log(`  ${commandText("fiber doctor")}`);
+  console.log(`  ${commandText("fiber status --watch")}`);
+  console.log(`  ${commandText("fiber pay --from a --to b --amount 1")}`);
 }
 
-function renderDevkitStatus(state) {
+function renderDevkitStatus(state: AnyRecord) {
   const lines = [];
-  lines.push(`Fiber Dev Kit home: ${state.devkitDir || devkitDir}`);
-  for (const node of Object.values(state.nodes || {})) {
+  lines.push(kv("Fiber Dev Kit home", valueText(state.devkitDir || devkitDir)));
+  for (const node of Object.values(state.nodes || {}) as AnyRecord[]) {
     const summary = summarizeNode(node);
-    lines.push(`node-${node.label}: ${summary.online ? "online" : "offline"} | peers: ${summary.peers} | rpc: ${node.rpcUrl}`);
+    lines.push(`${title(`node-${node.label}`)}: ${summary.online ? statusText("online") : statusText("offline")} | ${label("peers:")} ${valueText(summary.peers)} | ${label("rpc:")} ${valueText(node.rpcUrl)}`);
   }
   const nodeA = state.nodes && state.nodes.a;
   const channels = nodeA ? listChannels(nodeA).channels : [];
   if (state.nodes && state.nodes.a && state.nodes.b) {
     lines.push("");
-    lines.push("channel a <-> b");
+    lines.push(`${title("channel")} ${valueText("a <-> b")}`);
   }
   if (channels.length === 0) {
-    lines.push(`state: ${state.channel ? state.channel.state : "no channel found"}`);
+    lines.push(`${label("state:")} ${state.channel ? statusText(state.channel.state) : warningText("no channel found")}`);
   } else {
     for (const channel of channels.slice(0, 3)) {
-      lines.push(`state: ${channelState(channel)}`);
+      lines.push(`${label("state:")} ${statusText(channelState(channel))}`);
     }
   }
   if (state.lastPayment) {
     lines.push("");
-    lines.push(`last payment: ${state.lastPayment.status || "Submitted"} | ${state.lastPayment.amountCkb} CKB | ${state.lastPayment.hash || "hash unknown"}`);
+    lines.push(`${label("last payment:")} ${statusText(state.lastPayment.status || "Submitted")} | ${valueText(state.lastPayment.amountCkb)} CKB | ${state.lastPayment.hash ? valueText(state.lastPayment.hash) : warningText("hash unknown")}`);
   }
   return lines.join("\n");
 }
@@ -1218,25 +1291,25 @@ async function status(args = []) {
   const pidFile = path.join(runtimeDir, "fnn.pid");
   const pid = readPid(pidFile);
   const rpcUrl = currentRpcUrl();
-  console.log(`Fiber home: ${runtimeDir}`);
-  console.log(`Process: ${isRunning(pid) ? `running (${pid})` : "not running"}`);
-  console.log(`RPC: ${(await rpcPortOpen(rpcUrl)) ? `ready at ${rpcUrl}` : `not ready at ${rpcUrl}`}`);
+  console.log(kv("Fiber home", valueText(runtimeDir)));
+  console.log(kv("Process", isRunning(pid) ? `${statusText("running")} ${dim(`(${pid})`)}` : statusText("not running")));
+  console.log(kv("RPC", (await rpcPortOpen(rpcUrl)) ? `${statusText("ready")} at ${valueText(rpcUrl)}` : `${statusText("not ready")} at ${valueText(rpcUrl)}`));
 }
 
-function addCheck(checks, status, name, detail, suggestion) {
+function addCheck(checks: AnyRecord[], status: string, name: string, detail: any = null, suggestion: any = null) {
   checks.push({ status, name, detail, suggestion });
 }
 
-function printChecks(checks) {
+function printChecks(checks: AnyRecord[]) {
   for (const check of checks) {
-    const mark = check.status.padEnd(4, " ");
-    console.log(`${mark} ${check.name}${check.detail ? ` - ${check.detail}` : ""}`);
-    if (check.suggestion && check.status !== "OK") console.log(`     suggestion: ${check.suggestion}`);
+    const mark = statusText(check.status.padEnd(4, " "));
+    console.log(`${mark} ${title(check.name)}${check.detail ? ` ${dim("-")} ${check.status === "FAIL" ? errorText(check.detail) : valueText(check.detail)}` : ""}`);
+    if (check.suggestion && check.status !== "OK") console.log(`     ${label("suggestion:")} ${warningText(check.suggestion)}`);
   }
 }
 
 async function doctor() {
-  const checks = [];
+  const checks: AnyRecord[] = [];
   const state = loadState();
   const fnnVersion = commandVersion(binPath("fnn"), ["--version"]);
   addCheck(checks, fnnVersion.ok ? "OK" : "FAIL", "fnn installed", fnnVersion.text || "missing bundled binary");
@@ -1307,22 +1380,22 @@ function inspect() {
   if (!state.nodes || !state.nodes.a || !state.nodes.b) {
     fail("no two-node dev kit state found. Run `fiber start --nodes 2 --channel 200` first.");
   }
-  console.log("Fiber Dev Kit Inspector");
+  console.log(title("Fiber Dev Kit Inspector"));
   console.log("");
-  console.log("Topology");
-  console.log(`  node-a ${state.channel ? "---" : "-.-"} node-b`);
+  console.log(title("Topology"));
+  console.log(`  ${title("node-a")} ${state.channel ? successText("---") : dim("-.-")} ${title("node-b")}`);
   console.log("");
   console.log(renderDevkitStatus(state));
   console.log("");
-  console.log("Failure hints");
+  console.log(title("Failure hints"));
   if (state.channel && state.channel.state === "NegotiatingFunding") {
-    console.log("  channel is still negotiating funding");
-    console.log("  fix: wait for funding confirmation or reset node state");
+    console.log(`  ${warningText("channel is still negotiating funding")}`);
+    console.log(`  ${label("fix:")} wait for funding confirmation or reset node state`);
   } else if (state.channel && state.channel.state === "OpenFailed") {
-    console.log(`  channel open failed: ${state.channel.error || "unknown error"}`);
-    console.log("  fix: run `fiber doctor` and confirm wallet funding");
+    console.log(`  ${errorText("channel open failed:")} ${state.channel.error || "unknown error"}`);
+    console.log(`  ${label("fix:")} run ${commandText("fiber doctor")} and confirm wallet funding`);
   } else {
-    console.log("  no obvious failure recorded");
+    console.log(`  ${successText("no obvious failure recorded")}`);
   }
 }
 
@@ -1358,10 +1431,10 @@ function connectExternal(args) {
     return;
   }
 
-  console.log(`Connecting node-${node.label} to external peer`);
+  console.log(`${warningText("Connecting")} ${title(`node-${node.label}`)} to external peer`);
   const result = cliText(node.rpcUrl, cliArgs);
   state.externalPeers = state.externalPeers || [];
-  const record = {
+  const record: AnyRecord = {
     at: new Date().toISOString(),
     node: node.label,
     address,
@@ -1376,12 +1449,12 @@ function connectExternal(args) {
   if (!result.ok) {
     fail(`connect failed: ${record.error}`);
   }
-  console.log(`connected: node-${node.label}`);
-  if (address) console.log(`address: ${address}`);
-  if (pubkey) console.log(`pubkey: ${pubkey}`);
+  console.log(kv("connected", title(`node-${node.label}`)));
+  if (address) console.log(kv("address", valueText(address)));
+  if (pubkey) console.log(kv("pubkey", valueText(pubkey)));
 }
 
-function channelOpenAmount(opts) {
+function channelOpenAmount(opts: AnyRecord): AnyRecord {
   if (opts.amount !== undefined) {
     return { amount: toShannons(opts.amount), amountCkb: String(opts.amount), source: "--amount" };
   }
@@ -1420,10 +1493,10 @@ async function openChannel(args) {
     return;
   }
 
-  console.log(`Opening channel from node-${node.label} to ${peerPubkey}`);
-  console.log(`amount: ${amountInfo.amountCkb} CKB`);
+  console.log(`${warningText("Opening channel")} from ${title(`node-${node.label}`)} to ${valueText(peerPubkey)}`);
+  console.log(kv("amount", `${valueText(amountInfo.amountCkb)} CKB`));
   const result = cliJson(node.rpcUrl, cliArgs);
-  const record = {
+  const record: AnyRecord = {
     at: new Date().toISOString(),
     node: node.label,
     peerPubkey,
@@ -1443,22 +1516,22 @@ async function openChannel(args) {
     fail(`channel open failed: ${record.error}`);
   }
 
-  if (record.temporaryChannelId) console.log(`temporary channel id: ${record.temporaryChannelId}`);
-  console.log("channel: Opening");
+  if (record.temporaryChannelId) console.log(kv("temporary channel id", valueText(record.temporaryChannelId)));
+  console.log(kv("channel", statusText("Opening")));
 
   if (waitSeconds > 0) {
     const ready = await waitForChannelReady(node, peerPubkey, waitSeconds * 1000);
     record.status = ready.ok ? "ChannelReady" : ready.state;
     saveState(state);
-    console.log(`channel: ${record.status}`);
+    console.log(kv("channel", statusText(record.status)));
   }
 }
 
 function printChannelList(node, channels) {
-  console.log(`node-${node.label}: ${channels.length} channel(s)`);
+  console.log(`${title(`node-${node.label}`)}: ${valueText(channels.length)} channel(s)`);
   channels.forEach((channel, index) => {
     const id = extractChannelId(channel);
-    console.log(`${index + 1}. ${channelState(channel)}${id ? ` | ${id}` : ""}`);
+    console.log(`${valueText(`${index + 1}.`)} ${statusText(channelState(channel))}${id ? ` | ${valueText(id)}` : ""}`);
   });
 }
 
@@ -1505,7 +1578,7 @@ async function pay(args) {
   const amountCkb = fromShannons(amount);
   const currency = opts.currency || "Fibt";
 
-  console.log(`Creating invoice on node-${to.label} for ${amountCkb} CKB`);
+  console.log(`${warningText("Creating invoice")} on ${title(`node-${to.label}`)} for ${valueText(amountCkb)} CKB`);
   const invoiceResult = cliJson(to.rpcUrl, [
     "invoice", "new_invoice",
     "--amount", amount,
@@ -1520,7 +1593,7 @@ async function pay(args) {
     fail("invoice creation succeeded but no encoded invoice was found in the response");
   }
 
-  console.log(`Paying invoice from node-${from.label}`);
+  console.log(`${warningText("Paying invoice")} from ${title(`node-${from.label}`)}`);
   const payResult = cliJson(from.rpcUrl, [
     "payment", "send_payment",
     "--invoice", invoice,
@@ -1557,8 +1630,8 @@ async function pay(args) {
   }
 
   saveState(state);
-  console.log(`payment: ${state.lastPayment.status}`);
-  if (hash) console.log(`hash: ${hash}`);
+  console.log(kv("payment", statusText(state.lastPayment.status)));
+  if (hash) console.log(kv("hash", valueText(hash)));
 }
 
 function stopNodeProcess(node) {
@@ -1580,7 +1653,7 @@ function stop(args = []) {
     for (const node of Object.values(state.nodes || {})) {
       if (stopNodeProcess(node)) stopped += 1;
     }
-    console.log(stopped ? `Stopped ${stopped} Fiber Dev Kit node(s)` : "No Fiber Dev Kit nodes are running");
+    console.log(stopped ? `${successText("Stopped")} ${valueText(stopped)} Fiber Dev Kit node(s)` : warningText("No Fiber Dev Kit nodes are running"));
     return;
   }
 
@@ -1588,16 +1661,17 @@ function stop(args = []) {
   const pid = readPid(pidFile);
   if (!isRunning(pid)) {
     fs.rmSync(pidFile, { force: true });
-    console.log("No Fiber node is running");
+    console.log(warningText("No Fiber node is running"));
     return;
   }
   process.kill(pid, "SIGTERM");
   fs.rmSync(pidFile, { force: true });
-  console.log(`Stopped Fiber node (${pid})`);
+  console.log(`${successText("Stopped Fiber node")} ${dim(`(${pid})`)}`);
 }
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
+  await loadChalk();
   ensureMode(binPath("fnn"), 0o755);
   ensureMode(binPath("fnn-cli"), 0o755);
 
