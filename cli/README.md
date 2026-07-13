@@ -130,6 +130,9 @@ The launcher creates a random dev CKB key on first start and uses
 `FIBER_SECRET_KEY_PASSWORD=password` unless you set your own environment value.
 Do not use the generated key for production funds.
 
+CLI output uses Chalk colors for status, warnings, and errors. Set `NO_COLOR=1`
+if you need plain output in logs or scripts.
+
 ## Commands
 
 Full command docs live in [`docs/commands.md`](./docs/commands.md).
