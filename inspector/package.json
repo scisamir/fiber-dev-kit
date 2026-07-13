@@ -1,6 +1,6 @@
 {
   "name": "@fiber-dev-kit/inspector",
-  "version": "0.1.0-rc.0",
+  "version": "0.1.0-rc.1",
   "description": "Local payment-trace and channel-state dashboard for Fiber nodes",
   "license": "MIT",
   "type": "module",
@@ -50,7 +50,7 @@
     "watch": "tsup src/index.ts src/cli.ts --format esm --watch"
   },
   "dependencies": {
-    "@fiber-dev-kit/core": "0.1.0-rc.0",
+    "@fiber-dev-kit/core": "0.1.0-rc.1",
     "express": "^4.19.2",
     "ws": "^8.16.0"
   },
