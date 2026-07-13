@@ -1,6 +1,6 @@
 {
   "name": "@fiber-dev-kit/test-client",
-  "version": "0.1.0-rc.1",
+  "version": "0.1.0-rc.2",
   "description": "Programmatic TypeScript test API for Fiber payment and channel flows",
   "license": "MIT",
   "type": "module",
