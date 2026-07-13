@@ -18,7 +18,9 @@
     "fiber-network",
     "nervos",
     "inspector",
-    "monitoring"
+    "monitoring",
+    "@fiber-dev-kit",
+    "@fiber-dev-kit/inspector"
   ],
   "publishConfig": {
     "access": "public",

@@ -18,7 +18,9 @@
     "fiber-network",
     "nervos",
     "payments",
-    "testing"
+    "testing",
+    "@fiber-dev-kit",
+    "@fiber-dev-kit/test-client"
   ],
   "publishConfig": {
     "access": "public",

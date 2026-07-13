@@ -1,6 +1,6 @@
 {
   "name": "@fiber-dev-kit/core",
-  "version": "0.1.0-rc.0",
+  "version": "0.1.0-rc.1",
   "description": "Network-aware TypeScript RPC client for the Fiber Network Node (FNN)",
   "license": "MIT",
   "type": "module",
@@ -18,7 +18,9 @@
     "fiber-network",
     "nervos",
     "payments",
-    "rpc"
+    "rpc",
+    "@fiber-dev-kit",
+    "@fiber-dev-kit/core"
   ],
   "publishConfig": {
     "access": "public",

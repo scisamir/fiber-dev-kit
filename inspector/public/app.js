@@ -25,6 +25,14 @@ function byId(id) {
   return document.getElementById(id);
 }
 
+function button(className, text) {
+  const node = document.createElement("button");
+  node.type = "button";
+  if (className) node.className = className;
+  node.textContent = text;
+  return node;
+}
+
 async function fetchJson(url) {
   const res = await fetch(url);
   return res.json();
@@ -138,14 +146,70 @@ function renderTopology() {
     const point = positions.get(node.id);
     const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
     group.setAttribute("class", `topology-node ${node.healthy ? "node-online" : "node-offline"}`);
+    group.setAttribute("tabindex", "0");
+    group.setAttribute("role", "button");
+    group.setAttribute("aria-label", topologyNodeSummary(node, channels));
+    group.appendChild(svgTitle(topologyNodeSummary(node, channels)));
     group.appendChild(svgCircle(point.x, point.y, node.healthy ? 10 : 11, node.healthy ? "node-dot" : "node-dot node-dot-alert"));
     group.appendChild(svgText(point.x, point.y + 27, node.id, "node-label"));
     group.appendChild(svgText(point.x, point.y + 43, node.healthy ? `${node.peersCount}p ${node.channelCount}c` : "offline", "node-meta"));
+    group.appendChild(svgNodeHoverCard(node, channels, point, width, height));
     svg.appendChild(group);
   }
 
   container.innerHTML = "";
   container.appendChild(svg);
+}
+
+function topologyNodeSummary(node, channels) {
+  const nodeChannels = channels.filter((channel) => channel.nodeId === node.id);
+  const ready = nodeChannels.filter((channel) => channel.state?.state_name === "ChannelReady").length;
+  const totalLocal = nodeChannels.reduce((sum, channel) => sum + shannonToCkb(channel.local_balance), 0);
+  const status = node.healthy ? "online" : "offline";
+  return `${node.id}: ${status}, ${node.peersCount ?? 0} peers, ${ready}/${nodeChannels.length} ready channels, ${formatCompact(totalLocal)} CKB local`;
+}
+
+function svgNodeHoverCard(node, channels, point, width, height) {
+  const nodeChannels = channels.filter((channel) => channel.nodeId === node.id);
+  const ready = nodeChannels.filter((channel) => channel.state?.state_name === "ChannelReady").length;
+  const local = nodeChannels.reduce((sum, channel) => sum + shannonToCkb(channel.local_balance), 0);
+  const remote = nodeChannels.reduce((sum, channel) => sum + shannonToCkb(channel.remote_balance), 0);
+  const rows = [
+    [`status`, node.healthy ? "online" : "offline"],
+    [`version`, node.healthy ? node.version ?? "unknown" : "unreachable"],
+    [`peers`, String(node.peersCount ?? 0)],
+    [`channels`, `${ready}/${nodeChannels.length} ready`],
+    [`local`, `${formatCompact(local)} CKB`],
+    [`remote`, `${formatCompact(remote)} CKB`],
+  ];
+  if (node.pubkey) rows.push(["pubkey", shortHash(node.pubkey, 8)]);
+  if (node.walletAddress?.testnet) rows.push(["wallet", shortHash(node.walletAddress.testnet, 8)]);
+  if (!node.healthy && node.error) rows.push(["error", shortHash(node.error, 24)]);
+
+  const cardWidth = 226;
+  const cardHeight = 56 + rows.length * 17;
+  const x = Math.max(14, Math.min(width - cardWidth - 14, point.x + 20));
+  const y = Math.max(14, Math.min(height - cardHeight - 14, point.y - cardHeight / 2));
+  const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  group.setAttribute("class", "node-hover-card");
+
+  const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  rect.setAttribute("x", String(x));
+  rect.setAttribute("y", String(y));
+  rect.setAttribute("width", String(cardWidth));
+  rect.setAttribute("height", String(cardHeight));
+  rect.setAttribute("rx", "12");
+  rect.setAttribute("class", "node-hover-bg");
+  group.appendChild(rect);
+
+  group.appendChild(svgText(x + 16, y + 25, `node ${node.id}`, "node-hover-title"));
+  rows.forEach(([label, value], index) => {
+    const rowY = y + 52 + index * 17;
+    group.appendChild(svgText(x + 16, rowY, label, "node-hover-key"));
+    group.appendChild(svgText(x + cardWidth - 16, rowY, value, "node-hover-value"));
+  });
+
+  return group;
 }
 
 function layoutNodes(nodes, width, height) {
@@ -232,6 +296,12 @@ function svgText(x, y, text, className) {
   return label;
 }
 
+function svgTitle(text) {
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  title.textContent = text;
+  return title;
+}
+
 function renderNodes() {
   const container = byId("nodes-list");
   container.innerHTML = "";
@@ -256,12 +326,64 @@ function renderNodes() {
       if (node.pubkey) meta.appendChild(el("span", null, shortHash(node.pubkey, 9)));
     }
     main.appendChild(meta);
+
+    if (node.walletAddress?.testnet) {
+      main.appendChild(addressBlock("testnet wallet", node.walletAddress.testnet));
+      if (node.walletAddress.mainnet) {
+        main.appendChild(addressBlock("mainnet wallet", node.walletAddress.mainnet, true));
+      }
+    } else if (node.fundingLock?.args) {
+      main.appendChild(addressBlock("funding lock arg", node.fundingLock.args, true));
+    }
+
     row.appendChild(main);
     container.appendChild(row);
   }
 
   if (state.nodes.length === 0) {
     container.appendChild(emptyState("No nodes configured."));
+  }
+}
+
+function addressBlock(label, value, compact = false) {
+  const wrapper = el("div", compact ? "address-row address-row-compact" : "address-row");
+  const content = el("div", "address-content");
+  content.appendChild(el("span", "address-label", label));
+  content.appendChild(el("code", "address-value", value));
+  const copy = button("copy-button", "copy");
+  copy.addEventListener("click", async () => {
+    const ok = await copyText(value);
+    copy.textContent = ok ? "copied" : "failed";
+    setTimeout(() => {
+      copy.textContent = "copy";
+    }, 1200);
+  });
+  wrapper.appendChild(content);
+  wrapper.appendChild(copy);
+  return wrapper;
+}
+
+async function copyText(value) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    // Fall through to the textarea fallback.
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    return document.execCommand("copy");
+  } finally {
+    textarea.remove();
   }
 }
 

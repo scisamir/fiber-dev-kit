@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>fiber-inspector</title>
+  <title>fiber-dev-kit inspector</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <div class="eyebrow">Fiber Dev Kit</div>
-      <h1>fiber-inspector</h1>
-    </div>
+    <a class="brand" href="#topology" aria-label="fiber-dev-kit inspector">
+      <span class="brand-dot"></span>
+      <span>fiber-dev-kit</span>
+    </a>
     <div class="topbar-meta">
       <span id="event-beacon" class="event-beacon">quiet</span>
       <span id="last-updated" class="muted mono">waiting for data</span>
@@ -19,53 +19,89 @@
     </div>
   </header>
 
-  <main>
-    <section class="topology-panel" aria-label="Fiber topology">
-      <div class="panel-heading">
-        <h2>Topology</h2>
-        <div class="topology-stats">
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Inspector navigation">
+      <div class="sidebar-group">
+        <div class="sidebar-title">Inspector</div>
+        <a class="sidebar-link active" href="#topology">Live topology</a>
+        <a class="sidebar-link" href="#nodes">Node health</a>
+        <a class="sidebar-link" href="#channels">Channels</a>
+        <a class="sidebar-link" href="#alerts">Alerts</a>
+        <a class="sidebar-link" href="#payments">Payment trace</a>
+      </div>
+    </aside>
+
+    <main id="topology" class="workspace">
+      <section class="intro">
+        <div>
+          <p class="eyebrow">Local Fiber diagnostics</p>
+          <h1>Fiber Inspector</h1>
+        </div>
+        <div class="quick-stats" aria-label="Current Fiber metrics">
           <span id="metric-health">--</span>
           <span id="metric-peers">0 peers</span>
           <span id="metric-channels">0 channels</span>
           <span id="metric-payments">0 payments</span>
           <span id="metric-alerts">0 alerts</span>
         </div>
-      </div>
-      <div id="topology-map" class="topology-map"></div>
-    </section>
+      </section>
 
-    <section class="panel panel-nodes">
-      <div class="panel-heading">
-        <h2>Node Health</h2>
-        <span id="nodes-count" class="panel-count">0 nodes</span>
-      </div>
-      <div id="nodes-list" class="list"></div>
-    </section>
+      <section class="terminal-panel topology-panel" aria-label="Fiber topology">
+        <div class="terminal-chrome">
+          <span class="chrome-dot red"></span>
+          <span class="chrome-dot yellow"></span>
+          <span class="chrome-dot green"></span>
+          <span class="terminal-title">fiber-dev-kit - live topology</span>
+        </div>
+        <div id="topology-map" class="topology-map"></div>
+      </section>
 
-    <section class="panel panel-channels">
-      <div class="panel-heading">
-        <h2>Channels</h2>
-        <span id="channels-count" class="panel-count">0 channels</span>
-      </div>
-      <div id="channels-list" class="list"></div>
-    </section>
+      <section id="nodes" class="panel panel-nodes">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Nodes</p>
+            <h2>Node Health</h2>
+          </div>
+          <span id="nodes-count" class="panel-count">0 nodes</span>
+        </div>
+        <div id="nodes-list" class="list"></div>
+      </section>
 
-    <section class="panel panel-wide">
-      <div class="panel-heading">
-        <h2>Alerts</h2>
-        <span id="alerts-count" class="panel-count">0 active</span>
-      </div>
-      <div id="alerts-list" class="list"></div>
-    </section>
+      <section id="channels" class="panel panel-channels">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Liquidity</p>
+            <h2>Channels</h2>
+          </div>
+          <span id="channels-count" class="panel-count">0 channels</span>
+        </div>
+        <div id="channels-list" class="list"></div>
+      </section>
 
-    <section class="panel panel-wide">
-      <div class="panel-heading">
-        <h2>Payment Trace</h2>
-        <span id="payments-count" class="panel-count">0 payments</span>
-      </div>
-      <div id="payments-list" class="list"></div>
-    </section>
-  </main>
+      <section id="alerts" class="panel panel-wide">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Diagnostics</p>
+            <h2>Alerts</h2>
+          </div>
+          <span id="alerts-count" class="panel-count">0 active</span>
+        </div>
+        <div id="alerts-list" class="list"></div>
+      </section>
+
+      <section id="payments" class="panel panel-wide">
+        <div class="panel-heading">
+          <div>
+            <p class="panel-kicker">Trace</p>
+            <h2>Payment Trace</h2>
+          </div>
+          <span id="payments-count" class="panel-count">0 payments</span>
+        </div>
+        <div id="payments-list" class="list"></div>
+      </section>
+    </main>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

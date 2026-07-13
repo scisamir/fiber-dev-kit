@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   startInspector
-} from "./chunk-OBFLF2QP.js";
+} from "./chunk-WLVO7EVN.js";
 
 // src/cli.ts
 import fs from "fs";
