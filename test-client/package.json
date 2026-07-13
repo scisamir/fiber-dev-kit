@@ -1,6 +1,6 @@
 {
   "name": "@fiber-dev-kit/test-client",
-  "version": "0.1.0-rc.0",
+  "version": "0.1.0-rc.2",
   "description": "Programmatic TypeScript test API for Fiber payment and channel flows",
   "license": "MIT",
   "type": "module",
@@ -18,7 +18,9 @@
     "fiber-network",
     "nervos",
     "payments",
-    "testing"
+    "testing",
+    "@fiber-dev-kit",
+    "@fiber-dev-kit/test-client"
   ],
   "publishConfig": {
     "access": "public",
@@ -43,7 +45,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fiber-dev-kit/core": "0.1.0-rc.0",
+    "@fiber-dev-kit/core": "0.1.0-rc.1",
     "chalk": "^5.6.2"
   },
   "devDependencies": {

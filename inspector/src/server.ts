@@ -171,11 +171,93 @@ async function collectAlerts(node: WatchedNode): Promise<Alert[]> {
 }
 
 function projectNodeInfo(info: NodeInfo) {
+  const fundingLock = info.default_funding_lock_script;
   return {
     version: info.version,
     pubkey: info.pubkey,
+    peerAddresses: info.addresses,
     nodeName: info.node_name,
     peersCount: Number(BigInt(info.peers_count)),
     channelCount: Number(BigInt(info.channel_count)),
+    fundingLock,
+    walletAddress: deriveCkbAddresses(fundingLock),
   };
+}
+
+const SECP256K1_BLAKE160_CODE_HASH = "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8";
+const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+function deriveCkbAddresses(script: NodeInfo["default_funding_lock_script"]): { testnet: string; mainnet: string } | null {
+  if (script.code_hash.toLowerCase() !== SECP256K1_BLAKE160_CODE_HASH) return null;
+  const args = hexToBytes(script.args);
+  if (args.length !== 20) return null;
+  const shortPayload = [0x01, 0x00, ...args];
+  return {
+    testnet: bech32Encode("ckt", shortPayload),
+    mainnet: bech32Encode("ckb", shortPayload),
+  };
+}
+
+function hexToBytes(hex: string): number[] {
+  const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
+  if (normalized.length % 2 !== 0 || !/^[0-9a-f]*$/i.test(normalized)) return [];
+  const bytes: number[] = [];
+  for (let i = 0; i < normalized.length; i += 2) {
+    bytes.push(Number.parseInt(normalized.slice(i, i + 2), 16));
+  }
+  return bytes;
+}
+
+function bech32Encode(prefix: string, bytes: number[]): string {
+  const words = convertBits(bytes, 8, 5, true);
+  const checksum = bech32CreateChecksum(prefix, words);
+  return `${prefix}1${[...words, ...checksum].map((value) => BECH32_CHARSET[value]).join("")}`;
+}
+
+function bech32CreateChecksum(prefix: string, words: number[]): number[] {
+  const values = [...bech32HrpExpand(prefix), ...words, 0, 0, 0, 0, 0, 0];
+  const mod = bech32Polymod(values) ^ 1;
+  const checksum: number[] = [];
+  for (let p = 0; p < 6; p += 1) {
+    checksum.push((mod >> (5 * (5 - p))) & 31);
+  }
+  return checksum;
+}
+
+function bech32HrpExpand(prefix: string): number[] {
+  const values: number[] = [];
+  for (let i = 0; i < prefix.length; i += 1) values.push(prefix.charCodeAt(i) >> 5);
+  values.push(0);
+  for (let i = 0; i < prefix.length; i += 1) values.push(prefix.charCodeAt(i) & 31);
+  return values;
+}
+
+function bech32Polymod(values: number[]): number {
+  const generators = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const value of values) {
+    const top = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ value;
+    for (let i = 0; i < 5; i += 1) {
+      if ((top >> i) & 1) chk ^= generators[i];
+    }
+  }
+  return chk;
+}
+
+function convertBits(data: number[], fromBits: number, toBits: number, pad: boolean): number[] {
+  let acc = 0;
+  let bits = 0;
+  const ret: number[] = [];
+  const maxv = (1 << toBits) - 1;
+  for (const value of data) {
+    acc = (acc << fromBits) | value;
+    bits += fromBits;
+    while (bits >= toBits) {
+      bits -= toBits;
+      ret.push((acc >> bits) & maxv);
+    }
+  }
+  if (pad && bits > 0) ret.push((acc << (toBits - bits)) & maxv);
+  return ret;
 }
