@@ -22,6 +22,7 @@ const devkitStatePath = path.join(devkitDir, "state.json");
 const platformKey = `${process.platform}-${process.arch}`;
 const ckbShannons = 100000000n;
 const defaultCkbRpcUrl = "https://testnet.ckbapp.dev/";
+const defaultCkbFaucetUrl = "https://faucet.nervos.org/";
 const nodeAliases = ["a", "b", "c", "d", "e"];
 let chalk = plainChalk();
 function plainChalk() {
@@ -95,10 +96,13 @@ function usage() {
   ${commandText("fiber start --nodes 2 --channel 200")} ${dim("[--wait 180]")}
   ${commandText("fiber connect --node a --address <multiaddr>")}
   ${commandText("fiber connect --node a --pubkey <peer-pubkey>")}
+  ${commandText("fiber peer disconnect --node a --pubkey <peer-pubkey>")}
+  ${commandText("fiber address --node a")} ${dim("[--host <public-ip>]")}
   ${commandText("fiber channel open --node a --peer <peer-pubkey> --amount 200")}
   ${commandText("fiber channel list --node a")}
   ${commandText("fiber pay --from a --to b --amount 1")}
   ${commandText("fiber accounts")} ${dim("[--node a] [--json]")}
+  ${commandText("fiber balance")} ${dim("[--node a] [--json]")}
   ${commandText("fiber keys export --node a --yes")}
   ${commandText("fiber status")} ${dim("[--watch]")}
   ${commandText("fiber inspect")}
@@ -274,6 +278,25 @@ function nodeByLabel(state, label) {
         fail(`unknown node "${label}". Known nodes: ${Object.keys(state.nodes).join(", ") || "none"}`);
     }
     return node;
+}
+function findManagedNodeByPubkey(state, pubkey, excludeLabel) {
+    const target = String(pubkey || "").toLowerCase();
+    for (const node of Object.values(state.nodes || {})) {
+        if (excludeLabel && node.label === excludeLabel)
+            continue;
+        if (node.pubkey && String(node.pubkey).toLowerCase() === target)
+            return node;
+        const info = cliJson(node.rpcUrl, ["info"]);
+        if (!info.ok)
+            continue;
+        const livePubkey = findNested(info.json, (value) => typeof value === "string" && /^[0-9a-f]{66}$/i.test(value))
+            || outputField(info.stdout, "pubkey");
+        if (livePubkey)
+            node.pubkey = livePubkey;
+        if (livePubkey && String(livePubkey).toLowerCase() === target)
+            return node;
+    }
+    return null;
 }
 function toShannons(value) {
     const raw = String(value || "").trim();
@@ -484,7 +507,8 @@ function keyFileInfo(file) {
         exists: true,
         path: file,
         bytes: buf.length,
-        format: plaintextHex ? "plaintext-dev-hex" : "encrypted-or-binary"
+        format: plaintextHex ? "plaintext-dev-hex" : "encrypted-or-binary",
+        sha256: crypto.createHash("sha256").update(buf).digest("hex")
     };
 }
 function secretPayload(file) {
@@ -538,6 +562,39 @@ async function capacityForLock(lockScript) {
         return { ok: false, error: result.error };
     const capacity = result.result && (result.result.capacity || result.result);
     return { ok: true, capacity };
+}
+function capacityToShannons(value) {
+    if (value === null || value === undefined)
+        return null;
+    if (typeof value === "bigint")
+        return value;
+    if (typeof value === "number")
+        return BigInt(value);
+    const raw = String(value).trim();
+    if (!raw)
+        return null;
+    try {
+        if (/^0x[0-9a-f]+$/i.test(raw))
+            return BigInt(raw);
+        if (/^[0-9]+$/.test(raw))
+            return BigInt(raw);
+    }
+    catch (_) {
+        return null;
+    }
+    return null;
+}
+function formatCapacity(value) {
+    const shannons = capacityToShannons(value);
+    if (shannons === null)
+        return String(value || "unknown");
+    return `${fromShannons(shannons.toString())} CKB`;
+}
+function fileHash(file) {
+    const buf = safeReadFile(file);
+    if (!buf)
+        return null;
+    return crypto.createHash("sha256").update(buf).digest("hex");
 }
 function hasUrlArg(args) {
     return args.some((arg) => arg === "-u" || arg === "--url" || arg.startsWith("--url="));
@@ -894,6 +951,17 @@ function channelState(channel) {
     const found = findNested(channel, (value) => typeof value === "string" && /ChannelReady|NegotiatingFunding|Funding|Awaiting|Collaborating|Signing|Shutdown|Closed|Abandoned|Failed/i.test(value));
     return found || "Unknown";
 }
+function channelFailureDetail(channel) {
+    if (channel && typeof channel.failure_detail === "string")
+        return channel.failure_detail;
+    return findNested(channel, (value) => typeof value === "string" && /Funding tx rejected|Funding transaction aborted|FUNDING_ABORTED|failed|aborted/i.test(value)) || null;
+}
+function isSyntheticFailedOpening(channel) {
+    return Boolean(channel
+        && textContains(channel, /FUNDING_ABORTED|funding aborted/i)
+        && (channel.channel_outpoint === null || channel.channel_outpoint === undefined)
+        && !channel.latest_commitment_transaction_hash);
+}
 function listChannels(node, options = {}) {
     const args = ["channel", "list_channels"];
     if (options.pubkey)
@@ -930,9 +998,76 @@ async function waitForChannelReady(node, peerPubkey, timeoutMs) {
     }
     return { ok: false, state: lastState };
 }
+function liveNodePubkey(node) {
+    if (node.pubkey)
+        return node.pubkey;
+    const info = cliJson(node.rpcUrl, ["info"]);
+    if (!info.ok)
+        return null;
+    const pubkey = findNested(info.json, (value) => typeof value === "string" && /^[0-9a-f]{66}$/i.test(value))
+        || outputField(info.stdout, "pubkey");
+    if (pubkey)
+        node.pubkey = pubkey;
+    return pubkey || null;
+}
+async function waitForChannelReadyOnNodes(checks, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    const states = {};
+    while (Date.now() < deadline) {
+        let allReady = true;
+        for (const check of checks) {
+            const listed = listChannels(check.node, { pubkey: check.peerPubkey });
+            if (!listed.ok) {
+                states[check.label] = "RPCUnavailable";
+                allReady = false;
+                continue;
+            }
+            const channel = listed.channels.find((item) => JSON.stringify(item).includes(check.peerPubkey))
+                || listed.channels[0];
+            if (!channel) {
+                states[check.label] = "NotFound";
+                allReady = false;
+                continue;
+            }
+            const state = channelState(channel);
+            states[check.label] = state;
+            if (/Failed|Abandoned|Closed/i.test(state))
+                return { ok: false, state, states, channel };
+            if (!/ChannelReady/i.test(state))
+                allReady = false;
+        }
+        if (allReady)
+            return { ok: true, state: "ChannelReady", states };
+        await sleep(2000);
+    }
+    return {
+        ok: false,
+        state: Object.entries(states).map(([label, state]) => `${label}: ${state}`).join(", ") || "Unknown",
+        states
+    };
+}
 function listPayments(node) {
     const result = cliJson(node.rpcUrl, ["payment", "list_payments", "--limit", "10"]);
     return { ...result, payments: normalizeList(result.json) };
+}
+function paymentStatus(payment) {
+    if (payment && typeof payment.status === "string")
+        return payment.status;
+    if (Array.isArray(payment)) {
+        for (const item of payment) {
+            const found = paymentStatus(item);
+            if (found)
+                return found;
+        }
+    }
+    else if (payment && typeof payment === "object") {
+        for (const value of Object.values(payment)) {
+            const found = paymentStatus(value);
+            if (found)
+                return found;
+        }
+    }
+    return null;
 }
 function summarizeNode(node) {
     const pid = readPid(node.pidFile);
@@ -963,6 +1098,7 @@ async function accountInfo(node) {
         pubkey,
         peerAddress: node.peerAddress || null,
         ckbKey: keyFileInfo(path.join(node.ckbDir, "key")),
+        ckbExportedKey: keyFileInfo(path.join(node.ckbDir, "exported-key")),
         fiberKey: keyFileInfo(path.join(node.fiberDir, "sk")),
         fundingLock,
         address: addresses ? {
@@ -979,6 +1115,7 @@ function printAccount(account) {
     console.log(kv("online", statusText(account.online ? "yes" : "no")));
     console.log(kv("fiber pubkey", account.pubkey ? valueText(account.pubkey) : warningText("unknown until node RPC is online")));
     console.log(kv("ckb key", account.ckbKey.exists ? `${valueText(account.ckbKey.path)} ${dim(`(${account.ckbKey.format})`)}` : `${valueText(account.ckbKey.path)} ${errorText("(missing)")}`));
+    console.log(kv("ckb exported key", account.ckbExportedKey.exists ? `${valueText(account.ckbExportedKey.path)} ${dim(`(${account.ckbExportedKey.format})`)}` : `${valueText(account.ckbExportedKey.path)} ${warningText("(missing)")}`));
     console.log(kv("fiber key", account.fiberKey.exists ? `${valueText(account.fiberKey.path)} ${dim(`(${account.fiberKey.format})`)}` : `${valueText(account.fiberKey.path)} ${warningText("(missing until node starts)")}`));
     if (account.peerAddress)
         console.log(kv("peer address", valueText(account.peerAddress)));
@@ -999,15 +1136,14 @@ function printAccount(account) {
         console.log(kv("address", warningText("unavailable")));
     }
     if (account.capacity) {
-        console.log(kv("capacity", account.capacity.ok ? valueText(account.capacity.capacity) : warningText(`unavailable (${account.capacity.error})`)));
+        console.log(kv("capacity", account.capacity.ok ? valueText(formatCapacity(account.capacity.capacity)) : warningText(`unavailable (${account.capacity.error})`)));
     }
     console.log("");
 }
 async function accounts(args) {
     const opts = parseArgs(args);
     const state = loadState();
-    const nodes = state.nodes || {};
-    const selected = opts.node ? [nodeByLabel(state, opts.node)] : Object.values(nodes);
+    const selected = selectNodes(state, opts);
     if (selected.length === 0) {
         fail("no dev kit nodes found. Run `fiber start --nodes 2 --channel 200` first.");
     }
@@ -1022,6 +1158,117 @@ async function accounts(args) {
     for (const account of result)
         printAccount(account);
     console.log(dim(`Secrets are hidden. Use ${commandText("fiber keys export --node a --yes")} only for local dev recovery.`));
+}
+function selectNodes(state, opts) {
+    const nodes = state.nodes || {};
+    if (opts.node)
+        return [nodeByLabel(state, opts.node)];
+    return Object.values(nodes);
+}
+async function fundingStatus(node) {
+    const info = cliJson(node.rpcUrl, ["info"]);
+    if (!info.ok) {
+        return { ok: false, node, reason: `node-${node.label} RPC is not ready at ${node.rpcUrl}` };
+    }
+    const fundingLock = findFundingLockScript(info.json);
+    if (!fundingLock) {
+        return { ok: false, node, reason: `node-${node.label} funding lock is unavailable` };
+    }
+    const capacity = await capacityForLock(fundingLock);
+    if (!capacity || !capacity.ok) {
+        return { ok: false, node, fundingLock, reason: capacity ? capacity.error : "capacity unavailable" };
+    }
+    const shannons = capacityToShannons(capacity.capacity);
+    if (shannons === null) {
+        return { ok: false, node, fundingLock, capacity, reason: `could not parse capacity ${capacity.capacity}` };
+    }
+    const addresses = deriveAddresses(fundingLock.args);
+    return {
+        ok: true,
+        node,
+        fundingLock,
+        capacity,
+        shannons,
+        address: addresses ? { testnet: addresses.testnet, mainnet: addresses.mainnet } : null
+    };
+}
+function printBalanceStatus(status) {
+    const node = status.node;
+    console.log(title(`node-${node.label}`));
+    console.log(kv("rpc", valueText(node.rpcUrl)));
+    if (!status.ok) {
+        console.log(kv("balance", warningText(`unavailable (${status.reason})`)));
+        console.log("");
+        return;
+    }
+    console.log(kv("capacity", valueText(formatCapacity(status.capacity.capacity))));
+    if (status.address && status.address.testnet)
+        console.log(kv("testnet address", valueText(status.address.testnet)));
+    if (status.fundingLock && status.fundingLock.args)
+        console.log(kv("funding lock args", valueText(status.fundingLock.args)));
+    console.log("");
+}
+function fundingAction(status, nodeLabel) {
+    const address = status.address && status.address.testnet;
+    if (address)
+        return `Fund ${address} from ${defaultCkbFaucetUrl}.`;
+    return `Run \`fiber accounts --node ${nodeLabel}\` and fund the testnet address from ${defaultCkbFaucetUrl}.`;
+}
+async function balance(args) {
+    const opts = parseArgs(args);
+    const state = loadState();
+    const selected = selectNodes(state, opts);
+    if (selected.length === 0) {
+        fail("no dev kit nodes found. Run `fiber start --nodes 2 --channel 200` first.");
+    }
+    const statuses = [];
+    for (const node of selected) {
+        statuses.push(await fundingStatus(node));
+    }
+    if (opts.json) {
+        console.log(JSON.stringify(statuses.map((status) => ({
+            node: status.node.label,
+            ok: status.ok,
+            rpcUrl: status.node.rpcUrl,
+            capacity: status.capacity ? status.capacity.capacity : null,
+            capacityCkb: status.ok ? fromShannons(status.shannons.toString()) : null,
+            address: status.address || null,
+            fundingLock: status.fundingLock || null,
+            reason: status.reason || null
+        })), null, 2));
+        return;
+    }
+    for (const status of statuses)
+        printBalanceStatus(status);
+}
+async function checkChannelFunding(node, amount) {
+    const required = BigInt(amount);
+    const status = await fundingStatus(node);
+    if (!status.ok) {
+        return { ok: false, status, message: status.reason };
+    }
+    if (status.shannons < required) {
+        return {
+            ok: false,
+            status,
+            message: `node-${node.label} has ${formatCapacity(status.capacity.capacity)} but needs at least ${fromShannons(amount)} CKB plus fees. ${fundingAction(status, node.label)}`
+        };
+    }
+    return { ok: true, status };
+}
+async function checkNodeFunded(node, purpose) {
+    const status = await fundingStatus(node);
+    if (!status.ok) {
+        return { ok: false, status, message: status.reason };
+    }
+    if (status.shannons <= 0n) {
+        return {
+            ok: false,
+            status,
+            message: `node-${node.label} has 0 CKB but needs testnet CKB to ${purpose}. ${fundingAction(status, node.label)}`
+        };
+    }
+    return { ok: true, status };
 }
 function exportKeys(args) {
     const [subcommand, ...rest] = args;
@@ -1116,6 +1363,24 @@ async function startDevKit(args) {
             console.log(warningText("Could not discover node-b peer address from logs"));
         }
         if (channelAmount && state.nodes.b.pubkey) {
+            const funding = await checkChannelFunding(state.nodes.a, channelAmount);
+            const peerFunding = await checkNodeFunded(state.nodes.b, "collaborate on channel funding");
+            const fundingFailures = [
+                funding.ok ? null : { label: "a", message: funding.message },
+                peerFunding.ok ? null : { label: "b", message: peerFunding.message }
+            ].filter(Boolean);
+            if (fundingFailures.length > 0) {
+                state.channel.state = "FundingRequired";
+                state.channel.error = fundingFailures.map((item) => item.message).join(" ");
+                console.log(`${warningText("Skipping channel open:")} funding required`);
+                for (const failure of fundingFailures) {
+                    console.log(kv(`fund node-${failure.label}`, warningText(failure.message)));
+                }
+                console.log(`Run ${commandText("fiber balance")} after funding the nodes, then retry ${commandText(`fiber channel open --node a --peer ${state.nodes.b.pubkey} --amount ${fromShannons(channelAmount)} --wait ${waitSeconds}`)}.`);
+                saveState(state);
+                printReadySummary(state);
+                return;
+            }
             console.log(`${warningText("Opening channel:")} ${title("node-a")} -> ${title("node-b")} | ${valueText(fromShannons(channelAmount))} CKB`);
             const open = cliText(state.nodes.a.rpcUrl, [
                 "channel", "open_channel",
@@ -1227,16 +1492,38 @@ function printChecks(checks) {
             console.log(`     ${label("suggestion:")} ${warningText(check.suggestion)}`);
     }
 }
+function addDuplicateNodeFileCheck(checks, nodes, name, fileForNode, badStatus, suggestion) {
+    const byHash = new Map();
+    for (const node of Object.values(nodes || {})) {
+        const hash = fileHash(fileForNode(node));
+        if (!hash)
+            continue;
+        const labels = byHash.get(hash) || [];
+        labels.push(`node-${node.label}`);
+        byHash.set(hash, labels);
+    }
+    const duplicates = [...byHash.values()].filter((labels) => labels.length > 1);
+    if (duplicates.length === 0) {
+        addCheck(checks, "OK", name, "unique");
+        return;
+    }
+    addCheck(checks, badStatus, name, duplicates.map((labels) => labels.join(" = ")).join("; "), suggestion);
+}
 async function doctor() {
     const checks = [];
     const state = loadState();
+    const nodes = state.nodes || {};
     const fnnVersion = commandVersion(binPath("fnn"), ["--version"]);
     addCheck(checks, fnnVersion.ok ? "OK" : "FAIL", "fnn installed", fnnVersion.text || "missing bundled binary");
     const cliVersion = commandVersion(binPath("fnn-cli"), ["--version"]);
     addCheck(checks, cliVersion.ok ? "OK" : "FAIL", "fnn-cli installed", cliVersion.text || "missing bundled binary");
     const ckbCli = commandVersion("ckb-cli", ["--version"]);
     addCheck(checks, ckbCli.ok ? "OK" : "WARN", "ckb-cli installed", ckbCli.text || "not found in PATH", "install ckb-cli if you want wallet funding checks from the terminal");
-    const nodes = state.nodes || {};
+    if (Object.keys(nodes).length > 1) {
+        addDuplicateNodeFileCheck(checks, nodes, "CKB runtime keys unique", (node) => path.join(node.ckbDir, "key"), "FAIL", "regenerate one node's ckb/key or start each node with a separate --ckb-base-dir");
+        addDuplicateNodeFileCheck(checks, nodes, "Fiber node keys unique", (node) => path.join(node.fiberDir, "sk"), "FAIL", "regenerate one node's fiber/sk or start each node with a separate --fiber-base-dir");
+        addDuplicateNodeFileCheck(checks, nodes, "exported CKB keys unique", (node) => path.join(node.ckbDir, "exported-key"), "WARN", "delete the stale exported-key and re-export the matching local dev key before using ckb-cli --privkey-path");
+    }
     for (const label of ["a", "b"]) {
         const node = nodes[label];
         if (!node) {
@@ -1256,33 +1543,65 @@ async function doctor() {
     const ckbRpcUrl = process.env.CKB_NODE_RPC_URL || defaultCkbRpcUrl;
     const tip = await jsonRpc(ckbRpcUrl, "get_tip_header");
     addCheck(checks, tip.ok ? "OK" : "WARN", "CKB RPC healthy", ckbRpcUrl, tip.ok ? null : tip.error);
-    const nodeA = nodes.a;
-    let infoA = nodeA ? cliJson(nodeA.rpcUrl, ["info"]) : null;
-    const fundingScript = infoA && infoA.ok ? findNested(infoA.json, (value) => value && typeof value === "object" && value.code_hash && value.hash_type && value.args) : null;
-    if (fundingScript) {
-        const capacity = await jsonRpc(ckbRpcUrl, "get_cells_capacity", [{ script: fundingScript, script_type: "lock" }]);
-        if (capacity.ok) {
-            const rawCapacity = capacity.result && (capacity.result.capacity || capacity.result);
-            const funded = rawCapacity && rawCapacity !== "0x0" && rawCapacity !== "0";
-            addCheck(checks, funded ? "OK" : "FAIL", "wallet funded", rawCapacity ? `capacity ${rawCapacity}` : "zero capacity", "run `fiber accounts --node a` and fund the node-a testnet address");
+    const fundingStatuses = [];
+    for (const label of ["a", "b"]) {
+        const node = nodes[label];
+        if (!node)
+            continue;
+        const status = await fundingStatus(node);
+        fundingStatuses.push(status);
+        if (!status.ok) {
+            addCheck(checks, "WARN", `node-${label} wallet funded`, status.reason, `run \`fiber accounts --node ${label}\` after the node RPC is online`);
+            continue;
+        }
+        const funded = status.shannons > 0n;
+        addCheck(checks, funded ? "OK" : "FAIL", `node-${label} wallet funded`, formatCapacity(status.capacity.capacity), fundingAction(status, label));
+    }
+    const fundingArgs = new Map();
+    for (const status of fundingStatuses.filter((item) => item.ok)) {
+        const args = status.fundingLock && status.fundingLock.args;
+        if (!args)
+            continue;
+        const labels = fundingArgs.get(args) || [];
+        labels.push(`node-${status.node.label}`);
+        fundingArgs.set(args, labels);
+    }
+    const duplicatedFundingLocks = [...fundingArgs.values()].filter((labels) => labels.length > 1);
+    if (fundingStatuses.filter((item) => item.ok).length > 1) {
+        addCheck(checks, duplicatedFundingLocks.length ? "FAIL" : "OK", "running funding locks unique", duplicatedFundingLocks.length ? duplicatedFundingLocks.map((labels) => labels.join(" = ")).join("; ") : "unique", "restart nodes with separate --ckb-base-dir values");
+    }
+    const channelRows = [];
+    const channelListFailures = [];
+    for (const node of Object.values(nodes)) {
+        const channelResult = listChannels(node, { includeClosed: true });
+        const pendingResult = listChannels(node, { onlyPending: true });
+        if (!channelResult.ok && !pendingResult.ok) {
+            channelListFailures.push(`node-${node.label}`);
+            continue;
+        }
+        for (const channel of [...(channelResult.channels || []), ...(pendingResult.channels || [])]) {
+            channelRows.push({ node, channel });
+        }
+    }
+    if (channelRows.length === 0 && channelListFailures.length > 0) {
+        addCheck(checks, "WARN", "stale channels detected", `could not list channels for ${channelListFailures.join(", ")}`, "make sure node RPC is alive");
+    }
+    else {
+        const allChannels = channelRows.map((row) => row.channel);
+        const ready = allChannels.filter((channel) => textContains(channel, /ChannelReady/i));
+        const stale = allChannels.filter((channel) => textContains(channel, /Abandoned|Failed|Closed|FUNDING_ABORTED/i));
+        addCheck(checks, ready.length ? "OK" : "WARN", "ready channels detected", ready.length ? `${ready.length} ready channel record(s)` : "none");
+        addCheck(checks, stale.length ? "WARN" : "OK", "stale channels detected", stale.length ? `${stale.length} stale channel(s)` : "none");
+        const fundingAborted = channelRows.find((row) => textContains(row.channel, /FUNDING_ABORTED|Funding transaction aborted|Funding tx rejected/i));
+        if (fundingAborted) {
+            addCheck(checks, ready.length ? "WARN" : "FAIL", ready.length ? "historical channel funding aborted" : "channel funding aborted", `${channelFailureDetail(fundingAborted.channel) || "funding aborted"} on node-${fundingAborted.node.label}`, ready.length ? "old aborted channel found; current ready channels are usable" : "check `fiber balance`, duplicate keys, and node CKB funding before retrying");
         }
         else {
-            addCheck(checks, "WARN", "wallet funded", "capacity check unavailable", "run `fiber accounts --node a` and confirm the generated wallet has testnet CKB");
+            addCheck(checks, "OK", "channel funding aborted", "none");
         }
-    }
-    else {
-        addCheck(checks, "WARN", "wallet funded", "funding lock unavailable", "start node-a, then run `fiber accounts --node a`");
-    }
-    const channelResult = nodeA ? listChannels(nodeA, { includeClosed: true }) : { ok: false, channels: [] };
-    if (!channelResult.ok) {
-        addCheck(checks, "WARN", "stale channels detected", "could not list channels", "make sure node-a RPC is alive");
-    }
-    else {
-        const stale = channelResult.channels.filter((channel) => textContains(channel, /Abandoned|Failed|Closed/i));
-        addCheck(checks, stale.length ? "WARN" : "OK", "stale channels detected", stale.length ? `${stale.length} stale channel(s)` : "none");
-        const stuck = channelResult.channels.find((channel) => textContains(channel, /NegotiatingFunding/i));
+        const stuck = channelRows.find((row) => textContains(row.channel, /NegotiatingFunding/i));
         if (stuck) {
-            addCheck(checks, "FAIL", "channel stuck in NegotiatingFunding", "pending funding negotiation", "reset node state or wait for funding confirmation");
+            addCheck(checks, "FAIL", "channel stuck in NegotiatingFunding", `pending funding negotiation on node-${stuck.node.label}`, "reset node state or wait for funding confirmation");
         }
         else {
             addCheck(checks, "OK", "channel stuck in NegotiatingFunding", "none");
@@ -1315,9 +1634,19 @@ function inspect() {
         console.log(`  ${successText("no obvious failure recorded")}`);
     }
 }
+function looksLikeEncodedInvoice(value) {
+    return typeof value === "string" && /^fib[bdt][a-z0-9]{20,}$/i.test(value.trim());
+}
 function extractInvoice(value) {
-    const found = findNested(value, (item) => typeof item === "string" && /^fib[a-z0-9]+/i.test(item));
-    return found || null;
+    if (value && typeof value === "object" && looksLikeEncodedInvoice(value.invoice_address)) {
+        return value.invoice_address.trim();
+    }
+    if (typeof value === "string") {
+        const match = value.match(/\bfib[bdt][a-z0-9]{20,}\b/i);
+        return match ? match[0] : null;
+    }
+    const found = findNested(value, looksLikeEncodedInvoice);
+    return found ? found.trim() : null;
 }
 function extractPaymentHash(value) {
     return findNested(value, (item) => typeof item === "string" && /^(0x)?[0-9a-f]{64}$/i.test(item)) || null;
@@ -1368,6 +1697,60 @@ function connectExternal(args) {
     if (pubkey)
         console.log(kv("pubkey", valueText(pubkey)));
 }
+function disconnectPeer(args) {
+    const opts = parseArgs(args);
+    const state = loadState();
+    const node = nodeByLabel(state, opts.node || "a");
+    const pubkey = normalizePubkey(opts.pubkey || opts.peer, "--pubkey");
+    const cliArgs = ["peer", "disconnect_peer", "--pubkey", pubkey];
+    if (opts["dry-run"]) {
+        console.log(formatCliCommand(node.rpcUrl, cliArgs));
+        return;
+    }
+    const result = cliText(node.rpcUrl, cliArgs);
+    if (!result.ok) {
+        fail(`disconnect failed: ${commandError(result)}`);
+    }
+    console.log(`${successText("Disconnected")} ${valueText(pubkey)} from ${title(`node-${node.label}`)}`);
+}
+function peerCommand(args) {
+    const [subcommand, ...rest] = args;
+    switch (subcommand) {
+        case "disconnect":
+            disconnectPeer(rest);
+            break;
+        default:
+            fail("unknown peer command. Usage: fiber peer disconnect --node a --pubkey <peer-pubkey>");
+    }
+}
+function replaceMultiaddrHost(address, host) {
+    const trimmed = host.trim();
+    let prefix = `/dns4/${trimmed}`;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(trimmed))
+        prefix = `/ip4/${trimmed}`;
+    if (trimmed.includes(":"))
+        prefix = `/ip6/${trimmed}`;
+    return address.replace(/^\/(ip4|ip6|dns4|dns6)\/[^/]+/, prefix);
+}
+function isPrivateShareAddress(address) {
+    return /\/ip4\/(0\.0\.0\.0|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(address)
+        || /\/ip6\/(::|::1)/.test(address);
+}
+function addressCommand(args) {
+    const opts = parseArgs(args);
+    const state = loadState();
+    const node = nodeByLabel(state, opts.node || "a");
+    const rawAddress = parsePeerAddressFromLog(node.logFile) || node.peerAddress || null;
+    if (!rawAddress) {
+        fail(`node-${node.label} peer address is not available yet. Start the node, then retry.`);
+    }
+    const address = opts.host ? replaceMultiaddrHost(rawAddress, String(opts.host)) : rawAddress;
+    console.log(title(`node-${node.label} peer address`));
+    console.log(kv("address", valueText(address)));
+    if (isPrivateShareAddress(address)) {
+        console.log(kv("warning", warningText("this address is local/private. Use --host <public-ip-or-domain> before sharing with a remote peer.")));
+    }
+}
 function channelOpenAmount(opts) {
     if (opts.amount !== undefined) {
         return { amount: toShannons(opts.amount), amountCkb: String(opts.amount), source: "--amount" };
@@ -1406,6 +1789,20 @@ async function openChannel(args) {
         console.log(formatCliCommand(node.rpcUrl, cliArgs));
         return;
     }
+    const managedPeer = findManagedNodeByPubkey(state, peerPubkey, node.label);
+    if (!opts["skip-balance-check"]) {
+        const funding = await checkChannelFunding(node, amountInfo.amount);
+        if (!funding.ok) {
+            fail(`refusing to open channel before funding is ready: ${funding.message} Use --skip-balance-check to bypass this preflight.`);
+        }
+        if (managedPeer && opts["one-way"] !== "true") {
+            const peerFunding = await checkNodeFunded(managedPeer, "collaborate on channel funding");
+            if (!peerFunding.ok) {
+                saveState(state);
+                fail(`refusing to open channel before peer funding is ready: ${peerFunding.message} Use --skip-balance-check to bypass this preflight.`);
+            }
+        }
+    }
     console.log(`${warningText("Opening channel")} from ${title(`node-${node.label}`)} to ${valueText(peerPubkey)}`);
     console.log(kv("amount", `${valueText(amountInfo.amountCkb)} CKB`));
     const result = cliJson(node.rpcUrl, cliArgs);
@@ -1431,10 +1828,22 @@ async function openChannel(args) {
         console.log(kv("temporary channel id", valueText(record.temporaryChannelId)));
     console.log(kv("channel", statusText("Opening")));
     if (waitSeconds > 0) {
-        const ready = await waitForChannelReady(node, peerPubkey, waitSeconds * 1000);
+        const openerPubkey = managedPeer ? liveNodePubkey(node) : null;
+        const checks = [{ label: `node-${node.label}`, node, peerPubkey }];
+        if (managedPeer && openerPubkey) {
+            checks.push({ label: `node-${managedPeer.label}`, node: managedPeer, peerPubkey: openerPubkey });
+        }
+        const ready = checks.length > 1
+            ? await waitForChannelReadyOnNodes(checks, waitSeconds * 1000)
+            : await waitForChannelReady(node, peerPubkey, waitSeconds * 1000);
         record.status = ready.ok ? "ChannelReady" : ready.state;
         saveState(state);
         console.log(kv("channel", statusText(record.status)));
+        if (ready.states) {
+            for (const [label, state] of Object.entries(ready.states)) {
+                console.log(kv(`${label} view`, statusText(String(state))));
+            }
+        }
     }
 }
 function printChannelList(node, channels) {
@@ -1442,6 +1851,12 @@ function printChannelList(node, channels) {
     channels.forEach((channel, index) => {
         const id = extractChannelId(channel);
         console.log(`${valueText(`${index + 1}.`)} ${statusText(channelState(channel))}${id ? ` | ${valueText(id)}` : ""}`);
+        const failure = channelFailureDetail(channel);
+        if (failure)
+            console.log(`   ${label("failure:")} ${warningText(failure)}`);
+        if (isSyntheticFailedOpening(channel)) {
+            console.log(`   ${label("note:")} ${dim("historical failed opening; no active channel exists to close")}`);
+        }
     });
 }
 function listChannelCommand(args) {
@@ -1519,13 +1934,13 @@ async function pay(args) {
     };
     const deadline = Date.now() + optionInt(opts, "wait", 60) * 1000;
     while (hash && Date.now() < deadline) {
-        const payments = listPayments(from);
-        const payment = payments.payments.find((item) => JSON.stringify(item).includes(hash));
-        if (payment && textContains(payment, /Success|Succeeded/i)) {
+        const payment = cliJson(from.rpcUrl, ["payment", "get_payment", "--payment-hash", hash]);
+        const status = payment.ok ? paymentStatus(payment.json) : null;
+        if (status && /Success|Succeeded/i.test(status)) {
             state.lastPayment.status = "Success";
             break;
         }
-        if (payment && textContains(payment, /Failed/i)) {
+        if (status && /Failed/i.test(status)) {
             state.lastPayment.status = "Failed";
             break;
         }
@@ -1596,6 +2011,12 @@ async function main() {
         case "connect":
             connectExternal(args);
             break;
+        case "peer":
+            peerCommand(args);
+            break;
+        case "address":
+            addressCommand(args);
+            break;
         case "channel":
             await channelCommand(args);
             break;
@@ -1604,6 +2025,9 @@ async function main() {
             break;
         case "accounts":
             await accounts(args);
+            break;
+        case "balance":
+            await balance(args);
             break;
         case "keys":
             exportKeys(args);

@@ -60,8 +60,11 @@ It checks:
 - node-a and node-b RPC health
 - node-b peer address
 - CKB RPC health
-- node wallet funding
+- node-a and node-b wallet funding
+- duplicate CKB/Fiber runtime keys
+- duplicate exported CKB keys
 - stale channels
+- funding-aborted channels
 - channels stuck in `NegotiatingFunding`
 
 When a check fails, it prints the next suggested fix.
@@ -95,7 +98,9 @@ What it does in dev-kit mode:
 - starts bundled `fnn` processes
 - assigns non-conflicting RPC and P2P ports
 - connects node-a to node-b when both exist
-- opens a channel when `--channel` is provided
+- checks node-a has enough CKB before trying `--channel`
+- checks node-b is funded before local two-node channel funding
+- opens a channel when `--channel` is provided and funding is ready
 - waits for `ChannelReady` until the wait timeout
 
 Options:
@@ -133,6 +138,32 @@ Options:
 - `--save false` or `--no-save` prevents saving the peer address.
 - `--dry-run` prints the underlying `fnn-cli` command.
 
+## `fiber peer disconnect`
+
+Disconnects a managed dev-kit node from a Fiber peer.
+
+```bash
+fiber peer disconnect --node a --pubkey 03abc...
+fiber peer disconnect --node b --pubkey 02def...
+```
+
+Options:
+
+- `--node <label>` selects the local managed node. Default is `a`.
+- `--pubkey <pubkey>` or `--peer <pubkey>` selects the peer to disconnect.
+- `--dry-run` prints the underlying `fnn-cli` command.
+
+## `fiber address`
+
+Prints a managed node's discovered P2P address.
+
+```bash
+fiber address --node a
+fiber address --node a --host 203.0.113.10
+```
+
+Use `--host <public-ip-or-domain>` before sharing an address with a remote peer. Local addresses like `127.0.0.1` and bind addresses like `0.0.0.0` are not remotely reachable.
+
 ## `fiber channel open`
 
 Opens a channel from one managed node to a connected peer.
@@ -146,10 +177,12 @@ fiber channel open --node a --peer 03abc... --amount 200 --public true
 
 What it does:
 
+- checks the selected node has enough CKB before attempting the channel
+- checks the peer wallet too when the peer is another managed local node
 - calls `fnn-cli channel open_channel`
 - converts `--amount` from CKB to shannons
 - saves a record in `state.json` under `externalChannels`
-- optionally waits until the channel reaches `ChannelReady`
+- optionally waits until the channel reaches `ChannelReady`; for managed local peers it checks both node views
 
 Options:
 
@@ -163,6 +196,7 @@ Options:
 - `--one-way <true|false>` forwards the Fiber one-way channel flag.
 - `--funding-fee-rate <integer>` forwards the funding fee rate.
 - `--commitment-fee-rate <integer>` forwards the commitment fee rate.
+- `--skip-balance-check` bypasses the CKB funding preflight.
 - `--dry-run` prints the underlying `fnn-cli` command.
 
 The peer should be connected first with `fiber connect`.
@@ -223,6 +257,18 @@ fiber accounts --node a --json
 ```
 
 Use this after starting a dev-kit node so you know which address to fund.
+
+## `fiber balance`
+
+Shows the live CKB capacity for managed nodes.
+
+```bash
+fiber balance
+fiber balance --node a
+fiber balance --node a --json
+```
+
+Use this before opening a channel. The CLI also runs this check automatically before `fiber channel open` and before `fiber start --nodes 2 --channel <ckb>`. For local two-node channels, both node-a and node-b need testnet CKB.
 
 ## `fiber keys export`
 
