@@ -7,6 +7,17 @@ import {
 import fs from "fs";
 import os from "os";
 import path from "path";
+var useColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+function bold(value) {
+  return useColor ? `\x1B[1m${value}\x1B[22m` : value;
+}
+function terminalLink(label, url) {
+  return useColor ? `\x1B]8;;${url}\x1B\\${label}\x1B]8;;\x1B\\` : label;
+}
+function linkText(value) {
+  const label = useColor ? `\x1B[36m${value}\x1B[39m` : value;
+  return terminalLink(label, value);
+}
 function parseArgs(argv) {
   const nodes = [];
   let port;
@@ -74,8 +85,9 @@ async function main() {
     process.exit(1);
   }
   const handle = await startInspector({ nodes, port: parsed.port, host: parsed.host });
+  const inspectorUrl = `http://${handle.host}:${handle.port}`;
   console.log(`fiber-dev-kit-inspector watching ${nodes.map((n) => `${n.id}=${n.rpcUrl}`).join(", ")}`);
-  console.log(`Inspector: http://${handle.host}:${handle.port}`);
+  console.log(`${bold("Open in browser:")} ${linkText(inspectorUrl)}`);
   process.on("SIGINT", () => {
     handle.stop();
     process.exit(0);

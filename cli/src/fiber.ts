@@ -120,7 +120,7 @@ function usage() {
   ${commandText("fiber balance")} ${dim("[--node a] [--json]")}
   ${commandText("fiber keys export --node a --yes")}
   ${commandText("fiber status")} ${dim("[--watch]")}
-  ${commandText("fiber inspect")}
+  ${commandText("fiber inspect")} ${dim("[node=url...] [--port=3030]")}
   ${commandText("fiber node")} ${dim("[FNN_ARGS...]")}
   ${commandText("fiber cli")} ${dim("[FNN_CLI_ARGS...]")}
   ${commandText("fiber stop")} ${dim("[--all]")}
@@ -448,6 +448,23 @@ function cliText(rpcUrl: string, args: string[]): AnyRecord {
 
 function commandError(result: AnyRecord): string {
   return (result.stderr || result.stdout || `command exited with status ${result.status}`).trim();
+}
+
+function resolveInspectorCli(): string | null {
+  const candidates = [
+    path.resolve(pkgRoot, "..", "inspector", "dist", "cli.js"),
+    path.join(pkgRoot, "node_modules", "@fiber-dev-kit", "inspector", "dist", "cli.js"),
+    path.resolve(pkgRoot, "..", "node_modules", "@fiber-dev-kit", "inspector", "dist", "cli.js")
+  ];
+
+  try {
+    const entry = require.resolve("@fiber-dev-kit/inspector", { paths: [pkgRoot, process.cwd()] });
+    candidates.push(path.join(path.dirname(entry), "cli.js"));
+  } catch (_) {
+    // Fall back to known workspace/package layouts above.
+  }
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
 }
 
 function shellQuote(value) {
@@ -1744,28 +1761,18 @@ async function doctor() {
   printChecks(checks);
 }
 
-function inspect() {
-  const state = loadState();
-  if (!state.nodes || !state.nodes.a || !state.nodes.b) {
-    fail("no two-node dev kit state found. Run `fiber start --nodes 2 --channel 200` first.");
+function inspect(args: string[] = []) {
+  const inspectorCli = resolveInspectorCli();
+  if (!inspectorCli) {
+    fail("inspector package not found. Install `@fiber-dev-kit/inspector` or run from the fiber-dev-kit workspace.");
   }
-  console.log(title("Fiber Dev Kit Inspector"));
-  console.log("");
-  console.log(title("Topology"));
-  console.log(`  ${title("node-a")} ${state.channel ? successText("---") : dim("-.-")} ${title("node-b")}`);
-  console.log("");
-  console.log(renderDevkitStatus(state));
-  console.log("");
-  console.log(title("Failure hints"));
-  if (state.channel && state.channel.state === "NegotiatingFunding") {
-    console.log(`  ${warningText("channel is still negotiating funding")}`);
-    console.log(`  ${label("fix:")} wait for funding confirmation or reset node state`);
-  } else if (state.channel && state.channel.state === "OpenFailed") {
-    console.log(`  ${errorText("channel open failed:")} ${state.channel.error || "unknown error"}`);
-    console.log(`  ${label("fix:")} run ${commandText("fiber doctor")} and confirm wallet funding`);
-  } else {
-    console.log(`  ${successText("no obvious failure recorded")}`);
-  }
+
+  console.log(`${successText("Starting Fiber Inspector")}`);
+  console.log(kv("state", valueText(devkitStatePath)));
+  console.log(kv("browser", `open the URL below in your browser`));
+  run(process.execPath, [inspectorCli, ...args], {
+    FIBER_DEV_KIT_HOME: devkitDir
+  });
 }
 
 function looksLikeEncodedInvoice(value: any): boolean {
@@ -2191,7 +2198,7 @@ async function main() {
       exportKeys(args);
       break;
     case "inspect":
-      inspect();
+      inspect(args);
       break;
     case "node":
       runNode(args);

@@ -69,10 +69,11 @@ Export local dev keys only when you explicitly need them:
 fiber keys export --node a --yes
 ```
 
-Open the terminal inspector:
+Open the browser inspector:
 
 ```bash
 fiber inspect
+fiber inspect --port=3030
 ```
 
 You can still run a single Fiber node:

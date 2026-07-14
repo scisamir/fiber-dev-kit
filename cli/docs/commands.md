@@ -293,18 +293,20 @@ Without dev-kit state, it falls back to the single-node runtime and reports proc
 
 ## `fiber inspect`
 
-Prints a terminal inspector for the two-node dev kit.
+Starts the browser inspector for the dev kit.
 
 ```bash
 fiber inspect
+fiber inspect --port=3030
+fiber inspect a=http://127.0.0.1:8227 b=http://127.0.0.1:8237 --port=3030
 ```
 
-It shows:
+What it does:
 
-- node-a and node-b topology
-- channel state
-- last payment summary
-- failure hints for common channel states
+- launches `@fiber-dev-kit/inspector`
+- reads managed nodes from `~/.fiber-dev-kit/state.json` when no node arguments are provided
+- serves a local web UI, usually at `http://127.0.0.1:3030`
+- shows topology, node health, channels, alerts, and payment traces
 
 ## `fiber node`
 
