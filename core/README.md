@@ -7,7 +7,7 @@ This package is not a replacement for official Fiber SDKs. It is support infrast
 ## Install
 
 ```bash
-npm install @fiber-dev-kit/core
+npm install @fiber-dev-kit/core@0.1.0
 ```
 
 ## Usage
@@ -15,37 +15,40 @@ npm install @fiber-dev-kit/core
 ```ts
 import {
   FiberClient,
-  diagnosePaymentFailure,
-  evaluateNodeAlerts,
-  routeConfidence,
+  diagnose,
+  evaluateAlerts,
+  FiberError,
 } from "@fiber-dev-kit/core";
 
 const node = new FiberClient({
-  name: "a",
-  url: "http://127.0.0.1:8227",
+  nodeUrl: "http://127.0.0.1:8227",
+  network: "testnet",
 });
 
-const info = await node.getInfo();
+const info = await node.info();
 const peers = await node.listPeers();
-const channels = await node.listChannels();
+const channels = await node.listChannels({ includeClosed: true });
+const payments = await node.listPayments({ limit: 20 });
 
-const alerts = evaluateNodeAlerts({
-  name: "a",
-  info,
+const alerts = evaluateAlerts({
+  nodeId: "a",
+  node: info,
   peers,
   channels,
+  payments,
 });
 
-const confidence = await routeConfidence({
-  from: node,
-  to: "0372...",
-  amount: "1",
+const { invoice_address } = await node.createInvoice({
+  amount: 1,
+  description: "demo",
 });
 
 try {
-  await node.sendPayment({ invoice: "..." });
+  await node.payInvoice(invoice_address);
 } catch (error) {
-  console.error(diagnosePaymentFailure(error));
+  if (FiberError.is(error)) {
+    console.error(diagnose(error));
+  }
 }
 ```
 
@@ -55,7 +58,7 @@ try {
 - Amount conversion helpers for CKB/shannons.
 - Payment failure diagnosis helpers.
 - Node and channel alert rules.
-- Route confidence and `canPay` style reports for local testing.
+- Event polling helpers for channel and payment changes.
 - Typed Fiber node, channel, invoice, and payment shapes used by the devkit packages.
 
 ## Requirements

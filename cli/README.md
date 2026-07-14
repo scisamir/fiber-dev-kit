@@ -9,7 +9,7 @@ tree or wait for a Rust build.
 ## Install
 
 ```bash
-npm install -g @fiber-dev-kit/cli
+npm install -g @fiber-dev-kit/cli@0.1.0
 ```
 
 ## Use
