@@ -1,6 +1,6 @@
 {
   "name": "@fiber-dev-kit/inspector",
-  "version": "0.1.0-rc.2",
+  "version": "0.1.0",
   "description": "Local payment-trace and channel-state dashboard for Fiber nodes",
   "license": "MIT",
   "type": "module",
@@ -23,8 +23,7 @@
     "@fiber-dev-kit/inspector"
   ],
   "publishConfig": {
-    "access": "public",
-    "tag": "rc"
+    "access": "public"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,6 +1,6 @@
 {
   "name": "@fiber-dev-kit/test-client",
-  "version": "0.1.0-rc.2",
+  "version": "0.1.0",
   "description": "Programmatic TypeScript test API for Fiber payment and channel flows",
   "license": "MIT",
   "type": "module",
@@ -23,8 +23,7 @@
     "@fiber-dev-kit/test-client"
   ],
   "publishConfig": {
-    "access": "public",
-    "tag": "rc"
+    "access": "public"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
