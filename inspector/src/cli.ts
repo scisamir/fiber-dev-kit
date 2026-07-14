@@ -20,6 +20,21 @@ type ListenError = NodeJS.ErrnoException & {
   port?: number;
 };
 
+const useColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+
+function bold(value: string): string {
+  return useColor ? `\x1b[1m${value}\x1b[22m` : value;
+}
+
+function terminalLink(label: string, url: string): string {
+  return useColor ? `\x1b]8;;${url}\x1b\\${label}\x1b]8;;\x1b\\` : label;
+}
+
+function linkText(value: string): string {
+  const label = useColor ? `\x1b[36m${value}\x1b[39m` : value;
+  return terminalLink(label, value);
+}
+
 function parseArgs(argv: string[]): { nodes: InspectorNodeConfig[]; port?: number; host?: string; statePath?: string } {
   const nodes: InspectorNodeConfig[] = [];
   let port: number | undefined;
@@ -99,8 +114,9 @@ async function main() {
   }
 
   const handle = await startInspector({ nodes, port: parsed.port, host: parsed.host });
+  const inspectorUrl = `http://${handle.host}:${handle.port}`;
   console.log(`fiber-dev-kit-inspector watching ${nodes.map((n) => `${n.id}=${n.rpcUrl}`).join(", ")}`);
-  console.log(`Inspector: http://${handle.host}:${handle.port}`);
+  console.log(`${bold("Open in browser:")} ${linkText(inspectorUrl)}`);
 
   process.on("SIGINT", () => {
     handle.stop();

@@ -9,7 +9,7 @@ tree or wait for a Rust build.
 ## Install
 
 ```bash
-npm install -g @fiber-dev-kit/cli
+npm install -g @fiber-dev-kit/cli@0.1.0
 ```
 
 ## Use
@@ -24,6 +24,14 @@ Start a two-node dev kit and try to open a channel:
 
 ```bash
 fiber start --nodes 2 --channel 200
+```
+
+The CLI checks node-a's CKB balance before attempting the channel. For local
+two-node channels it also checks node-b can participate. Fund the addresses
+shown by `fiber accounts`, then verify with:
+
+```bash
+fiber balance
 ```
 
 Start only one managed node, then connect it to an external Fiber node:
@@ -51,6 +59,8 @@ Show generated node accounts and funding addresses:
 ```bash
 fiber accounts
 fiber accounts --node a
+fiber balance
+fiber balance --node a
 ```
 
 Export local dev keys only when you explicitly need them:
@@ -59,10 +69,11 @@ Export local dev keys only when you explicitly need them:
 fiber keys export --node a --yes
 ```
 
-Open the terminal inspector:
+Open the browser inspector:
 
 ```bash
 fiber inspect
+fiber inspect --port=3030
 ```
 
 You can still run a single Fiber node:
@@ -144,10 +155,13 @@ fiber start --nodes 2 --channel 200 [--wait 180]
 fiber start [--background|-b] [--dry-run] [-- FNN_ARGS...]
 fiber connect --node a --address <multiaddr>
 fiber connect --node a --pubkey <peer-pubkey>
+fiber peer disconnect --node a --pubkey <peer-pubkey>
+fiber address --node a [--host <public-ip>]
 fiber channel open --node a --peer <peer-pubkey> --amount 200
 fiber channel list --node a
 fiber pay --from a --to b --amount 1
 fiber accounts [--node a] [--json]
+fiber balance [--node a] [--json]
 fiber keys export --node a --yes
 fiber status [--watch]
 fiber inspect

@@ -7,7 +7,7 @@ The inspector is focused on local development and operator diagnostics. It is no
 ## Install
 
 ```bash
-npm install -g @fiber-dev-kit/inspector
+npm install -g @fiber-dev-kit/inspector@0.1.0
 ```
 
 ## Usage
@@ -25,6 +25,7 @@ http://127.0.0.1:3030
 If you also use `@fiber-dev-kit/cli`, the inspector can discover local devkit nodes from the CLI state file when no node arguments are provided:
 
 ```bash
+fiber inspect
 fiber-dev-kit-inspector
 ```
 

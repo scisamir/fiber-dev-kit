@@ -7,7 +7,7 @@ The test client builds on `@fiber-dev-kit/core` and is intended for local testne
 ## Install
 
 ```bash
-npm install @fiber-dev-kit/test-client
+npm install @fiber-dev-kit/test-client@0.1.0
 ```
 
 ## Usage
@@ -22,15 +22,15 @@ const network = new FiberNetwork({
   },
 });
 
-await network.expectNodeHealthy("a");
+await network.start();
 
-const report = await network.canPay({
-  from: "a",
-  to: "b",
-  amount: "1",
-});
+const bPubkey = await network.pubkeyOf("b");
+const report = await network.node("a").routeConfidence({ to: bPubkey, amount: 1 });
 
 console.log(report);
+
+const payment = await network.pay("a", "b", 1);
+await network.node("a").assertPaid(payment.payment_hash);
 ```
 
 ## What it provides

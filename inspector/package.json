@@ -23,7 +23,8 @@
     "@fiber-dev-kit/inspector"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -49,7 +50,7 @@
     "watch": "tsup src/index.ts src/cli.ts --format esm --watch"
   },
   "dependencies": {
-    "@fiber-dev-kit/core": "0.1.0-rc.1",
+    "@fiber-dev-kit/core": "0.1.0",
     "express": "^4.19.2",
     "ws": "^8.16.0"
   },

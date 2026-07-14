@@ -23,7 +23,8 @@
     "@fiber-dev-kit/core"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "latest"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

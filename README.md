@@ -64,10 +64,10 @@ The repository is an npm workspace with four packages. Publish `core` first beca
 
 | Package                                       | npm          | What it does                                           |
 | --------------------------------------------- | ------------ | ------------------------------------------------------ |
-| [`@fiber-dev-kit/core`](./core)               | `0.1.0-rc.0` | Typed RPC client, event stream, diagnostics, alerts    |
-| [`@fiber-dev-kit/test-client`](./test-client) | `0.1.0-rc.0` | Programmatic payment and channel test helpers          |
-| [`@fiber-dev-kit/inspector`](./inspector)     | `0.1.0-rc.0` | Local web dashboard for node health and payment traces |
-| [`@fiber-dev-kit/cli`](./cli)                 | `0.1.0`      | CLI that starts and manages local Fiber nodes from npm |
+| [`@fiber-dev-kit/core`](./core)               | `0.1.0` | Typed RPC client, event stream, diagnostics, alerts    |
+| [`@fiber-dev-kit/test-client`](./test-client) | `0.1.0` | Programmatic payment and channel test helpers          |
+| [`@fiber-dev-kit/inspector`](./inspector)     | `0.1.0` | Local web dashboard for node health and payment traces |
+| [`@fiber-dev-kit/cli`](./cli)                 | `0.1.0` | CLI that starts and manages local Fiber nodes from npm |
 
 ---
 
@@ -76,7 +76,7 @@ The repository is an npm workspace with four packages. Publish `core` first beca
 ### 1. Start a two-node local network
 
 ```bash
-npm install -g @fiber-dev-kit/cli
+npm install -g @fiber-dev-kit/cli@0.1.0
 
 # Start two Fiber nodes and open a 200 CKB channel between them
 fiber start --nodes 2 --channel 200
@@ -96,14 +96,14 @@ fiber pay --from a --to b --amount 1
 ### 3. Open the inspector dashboard
 
 ```bash
-fiber-dev-kit-inspector   # reads node URLs from CLI state automatically
-# → Inspector: http://127.0.0.1:3030
+fiber inspect             # reads node URLs from CLI state automatically
+# → Open in browser: http://127.0.0.1:3030
 ```
 
 ### 4. Use the SDK in your own code
 
 ```bash
-npm install @fiber-dev-kit/core
+npm install @fiber-dev-kit/core@0.1.0
 ```
 
 ```ts
@@ -407,15 +407,18 @@ A local web dashboard served over HTTP with a WebSocket live-event feed. Designe
 #### As a CLI tool
 
 ```bash
-npm install -g @fiber-dev-kit/inspector
+# From @fiber-dev-kit/cli
+fiber inspect
+fiber inspect --port=4000
+fiber inspect a=http://127.0.0.1:8227 b=http://127.0.0.1:8237
+```
 
-# Auto-reads node URLs from fiber CLI state (~/.fiber-dev-kit/state.json)
+The standalone inspector package still exposes its own binary:
+
+```bash
+npm install -g @fiber-dev-kit/inspector@0.1.0
 fiber-dev-kit-inspector
 
-# Explicit node URLs
-fiber-dev-kit-inspector a=http://127.0.0.1:8227 b=http://127.0.0.1:8237
-
-# Custom port and host
 fiber-dev-kit-inspector a=http://127.0.0.1:8227 --port=4000 --host=0.0.0.0
 ```
 
@@ -470,7 +473,7 @@ Broadcasts live `FiberEventClient` events as JSON to every connected browser:
 Vendors the `fnn` and `fnn-cli` binaries (Linux x64, current testnet release) so developers can start real Fiber nodes from npm without a Rust toolchain. Manages node state — RPC ports, P2P ports, dev keys, peer connections, channel records — in `~/.fiber-dev-kit/state.json`.
 
 ```bash
-npm install -g @fiber-dev-kit/cli
+npm install -g @fiber-dev-kit/cli@0.1.0
 ```
 
 #### Full command reference
@@ -501,7 +504,7 @@ fiber keys export --node a --yes                    # dev key export (requires -
 
 # Monitoring
 fiber status [--watch]                              # live node + channel status
-fiber inspect                                       # terminal inspector
+fiber inspect                                       # browser inspector
 
 # Escape hatches
 fiber node [FNN_ARGS...]                            # raw fnn binary passthrough
@@ -599,19 +602,19 @@ Publish `core` first:
 
 ```bash
 npm run build --workspaces --if-present
-npm publish --workspace @fiber-dev-kit/core     --tag rc
-npm publish --workspace @fiber-dev-kit/test-client --tag rc
-npm publish --workspace @fiber-dev-kit/inspector   --tag rc
+npm publish --workspace @fiber-dev-kit/core        --access public
+npm publish --workspace @fiber-dev-kit/test-client --access public
+npm publish --workspace @fiber-dev-kit/inspector   --access public
 npm publish --workspace @fiber-dev-kit/cli         --access public
 ```
 
-The `--tag rc` flag prevents prereleases from becoming the default `latest` install. Install the release candidate with:
+Install the stable `0.1.0` packages with:
 
 ```bash
-npm install @fiber-dev-kit/core@rc
-npm install @fiber-dev-kit/test-client@rc
-npm install -g @fiber-dev-kit/inspector@rc
-npm install -g @fiber-dev-kit/cli
+npm install @fiber-dev-kit/core@0.1.0
+npm install @fiber-dev-kit/test-client@0.1.0
+npm install -g @fiber-dev-kit/inspector@0.1.0
+npm install -g @fiber-dev-kit/cli@0.1.0
 ```
 
 ---
