@@ -13,7 +13,7 @@
     "demo:force": "node ./fiber-devkit-demo.mjs --force-payment"
   },
   "dependencies": {
-    "@fiber-dev-kit/cli": "0.1.0",
+    "@fiber-dev-kit/cli": "0.1.2",
     "@fiber-dev-kit/core": "0.1.0",
     "@fiber-dev-kit/test-client": "0.1.0",
     "chalk": "^5.6.2"
