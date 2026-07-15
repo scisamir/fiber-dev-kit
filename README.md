@@ -38,6 +38,7 @@ The Fiber Node (FNN) exposes a capable JSON-RPC interface, but using it directly
 - [Running tests](#running-tests)
 - [Publishing](#publishing)
 - [Infrastructure gap addressed](#infrastructure-gap-addressed)
+- [Known limitations](#known-limitations)
 - [Requirements](#requirements)
 - [License](#license)
 - [Hackathon](#hackathon)
@@ -54,7 +55,7 @@ Getting a Fiber node running and making a first payment today requires:
 - Decoding numeric error codes with no documented taxonomy
 - Writing your own retry, timeout, and diagnostic logic from scratch
 
-fiber-dev-kit removes all of this from the critical path. A developer can go from nothing to a two-node local network with a funded channel and a working test payment in under five minutes.
+fiber-dev-kit removes all of this from the critical path. Node setup, peering, channel opening, and a working test payment reduce to a handful of commands — the only step outside the tool's control is funding a testnet address from the CKB faucet, which depends on the faucet and chain, not on fiber-dev-kit. See [Known limitations](#known-limitations) for what that means in practice.
 
 ---
 
@@ -67,7 +68,7 @@ The repository is an npm workspace with four packages. Publish `core` first beca
 | [`@fiber-dev-kit/core`](./core)               | `0.1.0` | Typed RPC client, event stream, diagnostics, alerts    |
 | [`@fiber-dev-kit/test-client`](./test-client) | `0.1.0` | Programmatic payment and channel test helpers          |
 | [`@fiber-dev-kit/inspector`](./inspector)     | `0.1.0` | Local web dashboard for node health and payment traces |
-| [`@fiber-dev-kit/cli`](./cli)                 | `0.1.0` | CLI that starts and manages local Fiber nodes from npm |
+| [`@fiber-dev-kit/cli`](./cli)                 | `0.1.2` | CLI that starts and manages local Fiber nodes from npm |
 
 ---
 
@@ -76,7 +77,7 @@ The repository is an npm workspace with four packages. Publish `core` first beca
 ### 1. Start a two-node local network
 
 ```bash
-npm install -g @fiber-dev-kit/cli@0.1.0
+npm install -g @fiber-dev-kit/cli@0.1.2
 
 # Start two Fiber nodes and open a 200 CKB channel between them
 fiber start --nodes 2 --channel 200
@@ -473,7 +474,7 @@ Broadcasts live `FiberEventClient` events as JSON to every connected browser:
 Vendors the `fnn` and `fnn-cli` binaries (Linux x64, current testnet release) so developers can start real Fiber nodes from npm without a Rust toolchain. Manages node state — RPC ports, P2P ports, dev keys, peer connections, channel records — in `~/.fiber-dev-kit/state.json`.
 
 ```bash
-npm install -g @fiber-dev-kit/cli@0.1.0
+npm install -g @fiber-dev-kit/cli@0.1.2
 ```
 
 #### Full command reference
@@ -490,6 +491,8 @@ fiber stop [--all]                                   # stop managed nodes
 # Networking
 fiber connect --node a --address <multiaddr>
 fiber connect --node a --pubkey <pubkey>
+fiber peer disconnect --node a --pubkey <pubkey>    # disconnect a connected peer
+fiber address --node a [--host <public-ip>]         # this node's own multiaddr, to share
 
 # Channels
 fiber channel open --node a --peer <pubkey> --amount 200 [--wait 180]
@@ -499,7 +502,8 @@ fiber channel list --node a [--pending] [--closed] [--json]
 fiber pay --from a --to b --amount 1 [--wait 60]
 
 # Keys and accounts
-fiber accounts [--node a] [--json]                  # address to fund, balance check
+fiber accounts [--node a] [--json]                  # keys, funding addresses, capacity
+fiber balance [--node a] [--json]                   # CKB capacity per node, faucet reminder
 fiber keys export --node a --yes                    # dev key export (requires --yes)
 
 # Monitoring
@@ -521,6 +525,8 @@ fiber cli  [FNN_CLI_ARGS...]                        # raw fnn-cli binary passthr
 | `FIBER_CONFIG_TEMPLATE`     | `testnet.yml`                 | Config template (`testnet.yml` or `rpc-only.yml`) |
 | `FIBER_SECRET_KEY_PASSWORD` | `password`                    | Dev key passphrase                                |
 | `CKB_NODE_RPC_URL`          | `https://testnet.ckbapp.dev/` | CKB RPC for balance checks                        |
+| `RPC_LISTENING_ADDR`        | unset                         | Single-node RPC bind address override             |
+| `RUST_LOG`                  | `info`                        | `fnn` process log verbosity                       |
 
 > **Warning:** The CLI generates local development CKB keys automatically. Do not use them for production funds.
 
@@ -608,13 +614,13 @@ npm publish --workspace @fiber-dev-kit/inspector   --access public
 npm publish --workspace @fiber-dev-kit/cli         --access public
 ```
 
-Install the stable `0.1.0` packages with:
+Install the current stable packages with:
 
 ```bash
 npm install @fiber-dev-kit/core@0.1.0
 npm install @fiber-dev-kit/test-client@0.1.0
 npm install -g @fiber-dev-kit/inspector@0.1.0
-npm install -g @fiber-dev-kit/cli@0.1.0
+npm install -g @fiber-dev-kit/cli@0.1.2
 ```
 
 ---
@@ -633,6 +639,21 @@ The Fiber Network infrastructure stack had:
 - ❌ No way to start a real Fiber node from npm without a Rust build
 
 fiber-dev-kit addresses all six missing pieces. The goal is that a developer with no prior Fiber experience can install one npm package, run one command, and have a two-node network with a funded channel ready for testing — and that every subsequent tool they reach for (typed SDK, test assertions, live dashboard) already exists and is consistent with the CLI-managed network.
+
+---
+
+## Known limitations
+
+What's fully working, what depends on things outside this project, and what would need to change for production use:
+
+- **CLI binaries are Linux x64 only.** This is an MVP scope decision, not a bug — `@fiber-dev-kit/cli` vendors `fnn`/`fnn-cli` for Linux x64 alone, so `fiber start` and everything downstream of it (`channel`, `pay`, `inspect`, etc.) currently only runs there. `@fiber-dev-kit/core`, `@fiber-dev-kit/test-client`, and `@fiber-dev-kit/inspector` are plain Node.js/TypeScript with no native dependencies, so they work anywhere Node 18+ runs — you can point them at a Linux-hosted node from macOS or Windows.
+- **Channel funding depends on an external CKB testnet faucet.** Node setup, peering, and channel *opening* are deterministic and fast; actually having a funded channel also requires claiming testnet CKB from the faucet and waiting for on-chain confirmation, which is outside fiber-dev-kit's control and can take anywhere from seconds to several minutes depending on the faucet and chain conditions.
+- **Test coverage is uneven across packages.** `@fiber-dev-kit/core` and `@fiber-dev-kit/test-client` have real automated unit tests (mocked RPC responses, no live node required). `@fiber-dev-kit/inspector` and `@fiber-dev-kit/cli` currently have none — they've been exercised manually against live nodes, but not covered by an automated suite.
+- **No CI pipeline yet.** There's no `.github/workflows` in this repo; `npm run build`/`npm test --workspaces` are run manually before publishing.
+- **The multi-node orchestration path (`FiberNetwork.openChannel`/`.pay`) is verified two ways, not one combined way.** The underlying RPC calls are proven by a real, manually-run two-node testnet payment (connect → open channel → invoice → pay → `Success`), and the orchestration *logic* (readiness polling, invoice/pay ordering, peer-connect dedup) is covered by mocked unit tests — but the two haven't yet been combined into a single automated run against two live funded nodes.
+- **`diagnose()` and `evaluateAlerts()` are heuristic, not exhaustive.** FNN doesn't publish a stable error taxonomy, so the pattern tables behind both are a living, appendable list built from error text observed in practice. A failure mode nobody has hit yet will fall through to `UNKNOWN` rather than a specific diagnosis code.
+- **The inspector holds state in memory only.** Node health, channels, and payment history reset on restart — there's no persistence layer, so historical traces don't survive a restart of the inspector process itself (the underlying node/channel state is unaffected).
+- **Mainnet is guarded, not independently live-tested.** `FiberClient`'s mainnet write guard (`network: "mainnet"` blocks fund-moving calls unless `allowMainnetWrites: true`) has been verified by unit test, but by design nothing in this project has actually moved funds on mainnet — that would require real CKB and is outside the scope of a hackathon submission.
 
 ---
 
