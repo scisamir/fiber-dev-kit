@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   description: siteDescription,
   keywords: siteKeywords,
   applicationName: siteName,
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: ["/icon.svg"],
+  },
   authors: [{ name: "fiber-dev-kit contributors", url: githubUrl }],
   category: "technology",
   alternates: {
