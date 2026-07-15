@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Fiber Dev Kit Docs
 
-## Getting Started
+This folder contains the hosted documentation site for Fiber Dev Kit.
 
-First, run the development server:
+The docs explain the four packages in this repository:
+
+- `@fiber-dev-kit/cli`: npm-installed Fiber node launcher and diagnostics CLI.
+- `@fiber-dev-kit/core`: typed TypeScript client for Fiber node JSON-RPC.
+- `@fiber-dev-kit/test-client`: programmatic helpers for payment/channel testing.
+- `@fiber-dev-kit/inspector`: browser dashboard for local node health, channels, and payments.
+
+## Local Development
+
+Install dependencies from this folder:
+
+```bash
+npm install
+```
+
+Run the docs site locally:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Build
 
-## Learn More
+```bash
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Deployment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The docs are a standard Next.js app and can be deployed to Vercel, Netlify, or any Node.js host that supports Next.js.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Set this environment variable in production:
 
-## Deploy on Vercel
+```bash
+NEXT_PUBLIC_SITE_URL=https://your-docs-domain.example
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+If `NEXT_PUBLIC_SITE_URL` is not set, metadata falls back to `http://localhost:3000` for local builds.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+
+The docs are informational only. The CLI and SDK packages are published from the repository root workspaces, not from this docs package.
