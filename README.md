@@ -88,6 +88,10 @@ fiber status --watch
 
 The CLI vendors the `fnn` and `fnn-cli` binaries — no Rust toolchain, no source build.
 
+> Compatibility: `@fiber-dev-kit/cli` currently ships Linux x64 Fiber binaries. The
+> TypeScript packages (`core`, `test-client`, and `inspector`) run anywhere Node.js
+> 18+ runs.
+
 ### 2. Send a test payment
 
 ```bash
