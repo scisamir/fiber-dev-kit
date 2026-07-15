@@ -2,3 +2,4 @@ node_modules/
 *.tgz
 .npm-cache/
 npm-debug.log*
+.claude/settings.local.json
