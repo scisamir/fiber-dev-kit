@@ -5,7 +5,7 @@ The npm package is `@fiber-dev-kit/cli` and exposes one command: `fiber`.
 Install it with:
 
 ```bash
-npm install -g @fiber-dev-kit/cli@0.1.0
+npm install -g @fiber-dev-kit/cli@0.1.2
 ```
 
 The CLI has two modes:
