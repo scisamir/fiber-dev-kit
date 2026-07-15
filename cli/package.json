@@ -1,6 +1,6 @@
 {
   "name": "@fiber-dev-kit/cli",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Fiber Dev Kit CLI for running Fiber nodes quickly from npm",
   "license": "MIT",
   "private": false,

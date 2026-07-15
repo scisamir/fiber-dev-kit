@@ -20,7 +20,7 @@ npm run build --workspaces --if-present
 From a fresh project after the packages are published:
 
 ```bash
-npm install @fiber-dev-kit/cli@0.1.0 @fiber-dev-kit/core@0.1.0 @fiber-dev-kit/test-client@0.1.0
+npm install @fiber-dev-kit/cli@0.1.2 @fiber-dev-kit/core@0.1.0 @fiber-dev-kit/test-client@0.1.0
 ```
 
 ## 2. Start Two Local Nodes
